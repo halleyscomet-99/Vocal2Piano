@@ -1,0 +1,148 @@
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "31e26ee7-d1e0-4294-9392-3e53b65c618c")
+	(paper "A4")
+	(title_block
+		(title "Vocal2Piano_Schematic")
+		(date "2026-02-25")
+		(rev "v4.0")
+		(company "Northwestern Univerisity")
+		(comment 1 "Master of Science in Robotics")
+		(comment 2 "Chenwan Halley Zhong")
+	)
+	(lib_symbols)
+	(sheet
+		(at 19.05 17.78)
+		(size 50.8 48.26)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "551bf0dc-13e0-4b26-bbd8-381c94667098")
+		(property "Sheetname" "Driver_Board_Right"
+			(at 19.05 17.0684 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "Driver_Board_Right.kicad_sch"
+			(at 19.05 66.6246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "Vocal2Piano"
+				(path "/31e26ee7-d1e0-4294-9392-3e53b65c618c"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 19.05 74.93)
+		(size 50.8 48.26)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "6585393b-59ed-42db-ba63-60a8f289865d")
+		(property "Sheetname" "Main_Board"
+			(at 19.05 74.2184 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "Main_Board.kicad_sch"
+			(at 19.05 123.7746 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "Vocal2Piano"
+				(path "/31e26ee7-d1e0-4294-9392-3e53b65c618c"
+					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 19.05 132.08)
+		(size 50.8 48.26)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "8162ac0d-157c-4c4f-93c2-a42343cd20bd")
+		(property "Sheetname" "Driver_Board_Left"
+			(at 19.05 131.3684 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "Driver_Board_Left.kicad_sch"
+			(at 19.05 180.9246 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "Vocal2Piano"
+				(path "/31e26ee7-d1e0-4294-9392-3e53b65c618c"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
+)
