@@ -37,7 +37,7 @@ ehthumbs.db
 Desktop.ini
 
 # ======================================================================
-# IDE and Editor Files (Optional)
+# IDE and Editor Files
 # ======================================================================
 
 # VS Code
@@ -48,11 +48,3 @@ Desktop.ini
 *~
 *.swp
 *.swo
-
-# ======================================================================
-# Project Specific (Fabrication)
-# ======================================================================
-
-# If you want to keep your final fabrication files but ignore 
-# temporary output folders during design:
-# hardware/fabrication/Vocal2Piano_output/
