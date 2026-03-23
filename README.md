@@ -1,32 +1,171 @@
-# Vocal2Piano: Adaptive Multi-DOF Robotic Accompaniment System
+# Vocal2Piano
 
-Vocal2Piano is an end-to-end robotic system designed to perform real-time piano accompaniment from vocal input. The system features a sophisticated mechatronic assembly, deep-learning-based audio transcription, and high-precision motion control.
+An external piano exoskeleton that enables real-time robotic accompaniment by tracking and transcribing vocal performances into physical key strikes.
 
-![Project Status](https://img.shields.io/badge/Status-In--Development-orange)
-![Platform](https://img.shields.io/badge/Platform-Teensy%204.1-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+---
 
-## Overview
+## System diagram
 
-Unlike traditional robotic pianos, Vocal2Piano utilizes a **Deep Learning MIR (Music Information Retrieval)** pipeline to transcribe vocal pitch and rhythm into MIDI data. This data is dynamically mapped to a coordinated state-space involving:
-* **Dual 30-Actuator Modules:** 60 independent solenoids capable of percussive performance.
-* **Synchronous Belt Linear Rail:** A high-speed carriage system that extends the playable range across the full piano keyboard.
+![System diagram](media/system.svg)
 
-## Technical Highlights
+---
 
-* **ML-Driven Transcription:** Real-time MIR pipeline for pitch tracking and vocal-to-MIDI mapping.
-* **Precision Motion Control:** Teensy 4.1 firmware utilizing hardware interrupts and trapezoidal acceleration profiles for sub-ms control latency.
-* **Custom Power Electronics:** Multi-layer PCB design featuring **TPS5430** buck converters for 12V-to-5V regulation and high-current isolation for **TMC2209** silent stepper drivers.
-* **Modular Mechatronics:** SolidWorks-optimized CAD with 3D-printed end-effectors designed for high-frequency durability.
+## How it works
 
-## Project Structure
+1. **Vocal2MIDI_live** listens to a microphone and converts pitch to MIDI in real time. Three modes: single-note melody instrument, singing/voice, or polyphonic chord input.
 
-```text
+2. **Vocal2MIDI_file** takes an uploaded audio file, separates vocals from accompaniment if needed (via Demucs), then transcribes to MIDI (via Basic Pitch ONNX).
+
+3. **MIDI2Chords** reads the live melody notes, figures out the key, picks a chord that fits, and sends voicing targets for each board.
+
+4. **MIDI2Piano** takes those chord notes, works out where each board needs to slide to cover them, and sends `MOVE` / `FIRE` commands to the Teensy over USB serial.
+
+5. **Teensy 4.1** moves the two stepper motors and fires the solenoids.
+
+6. **Max/MSP patch** shows the detected notes and key on a visual keyboard in real time, connected to the Vocal2MIDI_live MIDI virtual port.
+
+7. **Web frontend** lets you record live, upload files, see the pipeline status, and play back original vs MIDI side by side.
+
+---
+
+## Repository structure
+
+```
 Vocal2Piano/
-├── firmware/              # Teensy 4.1 C++ source code (Motion control, 595 logic)
-├── hardware/
-│   ├── CAD/               # SolidWorks models and 3D-printed STL files
-│   └── PCB/               # KiCad design files
-│       ├── libraries/     # Custom footprints (TMC2209, Teensy 4.1, etc.)
-│       └── fabrication/   # Gerbers, BOM, and CPL files for JLCPCB
-└── software/              # MIR Pipeline (Python/ML models for audio processing)
+├── software/              Python pipeline + React web UI
+│   ├── app/               React/Vite frontend
+│   ├── engine/            Python scripts
+│   │   ├── Vocal2MIDI_live.py
+│   │   ├── Vocal2MIDI_file.py
+│   │   ├── MIDI2Chords.py
+│   │   └── MIDI2Piano.py
+│   ├── files/
+│   │   ├── input/         uploaded audio (git-ignored)
+│   │   └── output/        generated MIDI + stems (git-ignored)
+│   └── patch/
+│       └── Vocal2MIDI.maxpat    Max/MSP visualization patch
+│
+├── firmware/              Teensy 4.1 firmware (PlatformIO / C++)
+│   ├── platformio.ini
+│   └── src/main.cpp
+│
+└── hardware/
+    ├── pcb/               KiCad design files, gerbers, BOM
+    └── cad/               Mechanical design, 3D print files
+```
+
+---
+
+## Quick start
+
+### Requirements
+
+- Python 3.11
+- Node.js 18+
+- PlatformIO CLI
+
+### Python environment
+
+```bash
+cd Vocal2Piano
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+pip install sounddevice aubio librosa scipy python-rtmidi websockets
+pip install 'basic-pitch[onnx]' onnxruntime
+pip install fastapi uvicorn python-multipart
+pip install demucs
+pip install pyserial
+
+# optional — better live pitch accuracy
+pip install crepe tensorflow
+```
+
+### Frontend
+
+```bash
+cd software/app
+npm install
+cp .env.example .env    # set VITE_BACKEND_URL=http://localhost:8000
+npm run dev             # opens at http://localhost:3000
+```
+
+### Firmware
+
+```bash
+cd firmware
+pip install platformio
+pio run --target upload
+pio device monitor --baud 115200
+# should print: Voice2Piano Teensy ready
+```
+
+### Running the full system
+
+Open four terminals:
+
+```bash
+# 1 — file conversion server (File tab in web UI)
+source .venv/bin/activate
+python software/engine/Vocal2MIDI_file.py --server
+
+# 2 — live pitch detection (match the mode selected in the UI)
+python software/engine/Vocal2MIDI_live.py --mode instrument --ws
+# or: --mode voice  (singing)
+# or: --mode chord  (chords/accompaniment)
+
+# 3 — chord generation
+python software/engine/MIDI2Chords.py
+
+# 4 — sends commands to Teensy
+python software/engine/MIDI2Piano.py --live
+```
+
+Open `http://localhost:3000`.
+
+For Max/MSP: open `software/patch/Vocal2MIDI.maxpat`, set the MIDI input to `Voice2Piano_Layer1`.
+
+---
+
+## Hardware
+
+Two driver boards (15 solenoids each) slide on independent linear rails driven by NEMA17 steppers via TMC2209 drivers. A Teensy 4.1 controls both boards and both motors over a single USB connection.
+
+### PCB
+
+See [`hardware/pcb/README.md`](hardware/pcb/README.md) for fabrication files, BOM, and assembly instructions.
+
+### CAD / Mechanical
+
+See [`hardware/cad/README.md`](hardware/cad/README.md) for the full mechanical design, system animation, and 3D printable parts with print settings.
+
+---
+
+## Calibrating rail movement
+
+After flashing the firmware, check that the boards move the right distance:
+
+```bash
+# in the Teensy serial monitor:
+HOME
+MOVE R 12 100
+```
+
+Measure the actual travel. It should be 12 × the semitone spacing on your piano (roughly 164mm). If it's off, adjust `STEPS_PER_SEMITONE` in `firmware/src/main.cpp` and reflash.
+
+---
+
+## Training on real music
+
+MIDI2Chords ships with hand-tuned chord transition weights. To replace them with weights learned from actual MIDI files:
+
+```bash
+python software/engine/MIDI2Chords.py --train software/files/input/
+# writes learned_transitions.json, loaded automatically next run
+```
+
+---
+
+## Author
+
+Chenwan Halley Zhong — MS Robotics, Northwestern University

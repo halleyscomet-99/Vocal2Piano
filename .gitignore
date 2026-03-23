@@ -48,3 +48,42 @@ Desktop.ini
 *~
 *.swp
 *.swo
+
+# ======================================================================
+# Python
+# ======================================================================
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Byte-compiled / optimized / DLL files (already have *.py[cod] above)
+*.pyo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# ======================================================================
+# Node / Frontend
+# ======================================================================
+
+software/app/node_modules/
+
+# ======================================================================
+# PlatformIO
+# ======================================================================
+
+firmware/.pio/
+
+# ======================================================================
+# Audio / MIDI project files
+# ======================================================================
+
+software/files/input/
+software/files/output/
+
+# Learned Markov weights (generated, not source)
+learned_transitions.json
