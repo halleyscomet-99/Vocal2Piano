@@ -2,13 +2,9 @@
 
 An external piano exoskeleton that enables real-time robotic accompaniment by tracking and transcribing vocal performances into physical key strikes.
 
----
-
 ## System diagram
 
 ![System diagram](media/system.svg)
-
----
 
 ## How it works
 
@@ -25,8 +21,6 @@ An external piano exoskeleton that enables real-time robotic accompaniment by tr
 6. **Max/MSP patch** shows the detected notes and key on a visual keyboard in real time, connected to the Vocal2MIDI_live MIDI virtual port.
 
 7. **Web frontend** lets you record live, upload files, see the pipeline status, and play back original vs MIDI side by side.
-
----
 
 ## Repository structure
 
@@ -53,8 +47,6 @@ Vocal2Piano/
     ├── pcb/               KiCad design files, gerbers, BOM
     └── cad/               Mechanical design, 3D print files
 ```
-
----
 
 ## Quick start
 
@@ -125,8 +117,6 @@ Open `http://localhost:3000`.
 
 For Max/MSP: open `software/patch/Vocal2MIDI.maxpat`, set the MIDI input to `Voice2Piano_Layer1`.
 
----
-
 ## Hardware
 
 Two driver boards (15 solenoids each) slide on independent linear rails driven by NEMA17 steppers via TMC2209 drivers. A Teensy 4.1 controls both boards and both motors over a single USB connection.
@@ -138,8 +128,6 @@ See [`hardware/pcb/README.md`](hardware/pcb/README.md) for fabrication files, BO
 ### CAD / Mechanical
 
 See [`hardware/cad/README.md`](hardware/cad/README.md) for the full mechanical design, system animation, and 3D printable parts with print settings.
-
----
 
 ## Calibrating rail movement
 
@@ -153,8 +141,6 @@ MOVE R 12 100
 
 Measure the actual travel. It should be 12 × the semitone spacing on your piano (roughly 164mm). If it's off, adjust `STEPS_PER_SEMITONE` in `firmware/src/main.cpp` and reflash.
 
----
-
 ## Training on real music
 
 MIDI2Chords ships with hand-tuned chord transition weights. To replace them with weights learned from actual MIDI files:
@@ -163,8 +149,6 @@ MIDI2Chords ships with hand-tuned chord transition weights. To replace them with
 python software/engine/MIDI2Chords.py --train software/files/input/
 # writes learned_transitions.json, loaded automatically next run
 ```
-
----
 
 ## Author
 

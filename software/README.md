@@ -2,8 +2,6 @@
 
 Python pipeline and React web UI.
 
----
-
 ## Structure
 
 ```
@@ -36,8 +34,6 @@ software/
     └── Vocal2MIDI.maxpat          Max/MSP visualization patch
 ```
 
----
-
 ## Engine scripts
 
 ### `Vocal2MIDI_live.py`
@@ -67,8 +63,6 @@ pip install crepe tensorflow
 
 Detection events are also written to `layer2_queue`, which `MIDI2Chords.py` reads from when running in `--live` mode.
 
----
-
 ### `Vocal2MIDI_file.py`
 
 Converts uploaded audio files to MIDI. Runs as an HTTP server for the web UI.
@@ -87,8 +81,6 @@ Source type is either auto-detected or user-specified:
 | `mixed` | Demucs separates stems, Basic Pitch runs on the accompaniment |
 
 The SSE stream (`POST /convert/stream`) sends pipeline step events as they happen, so the web UI progress bar updates in real time. Stems (vocals + accompaniment) are saved and served via `GET /files/{filename}`.
-
----
 
 ### `MIDI2Chords.py`
 
@@ -112,8 +104,6 @@ Output events look like:
 }
 ```
 
----
-
 ### `MIDI2Piano.py`
 
 Reads from `harmony_queue`, figures out where each board needs to slide to cover the target notes, and sends `MOVE` / `FIRE` commands to the Teensy over USB serial.
@@ -128,8 +118,6 @@ Auto-detects the Teensy by USB vendor ID. Falls back to simulation mode (prints 
 
 The rail planner tries every position from −12 to +24 semitones for each board and picks the combination that covers the most chord notes, with a small penalty for large movements.
 
----
-
 ## Frontend
 
 ```bash
@@ -142,13 +130,9 @@ npm run dev    # http://localhost:3000
 
 **File tab** — Pick source type (Auto / Voice / Instrumental / Mixed), drop a file. The pipeline progress updates step by step. For mixed files you get four tracks: original, MIDI output, separated vocals, and separated accompaniment.
 
----
-
 ## Max/MSP patch
 
 Open `software/patch/Vocal2MIDI.maxpat` in Max/MSP. Set the MIDI input to `Voice2Piano_Layer1` (the virtual port opened by `Vocal2MIDI_live.py`). The patch shows a live 88-key keyboard and a rolling note history.
-
----
 
 ## Dependencies
 

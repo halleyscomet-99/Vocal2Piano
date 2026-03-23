@@ -2,8 +2,6 @@
 
 Mechanical design files for the Vocal2Piano system — linear rail assemblies, solenoid mounts, and the piano interface bracket.
 
----
-
 ## Contents
 
 ```
@@ -21,16 +19,12 @@ hardware/cad/
 └── drawings/              2D reference drawings (PDF)
 ```
 
----
-
 ## System animation
 
 `simulation/Vocal2Piano_demo.mp4` shows the full system running:
 - Both rails sliding to different positions
 - Solenoids firing in response to chord events
 - The interplay between left and right boards covering different octaves
-
----
 
 ## 3D printable parts
 
@@ -45,8 +39,6 @@ All parts are designed for FDM printing. No supports needed unless noted.
 | `teensy_enclosure.stl` | PLA | 20% | 0.15mm | Optional |
 
 PETG recommended for parts that contact the solenoids — better heat resistance than PLA under sustained operation.
-
----
 
 ## Assembly notes
 

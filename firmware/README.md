@@ -4,8 +4,6 @@ Teensy 4.1 firmware. Receives serial commands from `MIDI2Piano.py` and controls 
 
 Built with [PlatformIO](https://platformio.org/).
 
----
-
 ## Build and flash
 
 ```bash
@@ -16,8 +14,6 @@ pio device monitor --baud 115200
 ```
 
 If VS Code shows red squiggles on the includes, run `pio init --ide vscode` once to generate the IntelliSense config. This doesn't affect compilation.
-
----
 
 ## Pin assignments
 
@@ -37,8 +33,6 @@ If VS Code shows red squiggles on the includes, run `pio init --ide vscode` once
 
 Both driver boards share SCK and CS. SER_A and SER_B are clocked together on every update so both boards latch simultaneously.
 
----
-
 ## Serial protocol
 
 115200 baud, ASCII, newline-terminated. Used by `MIDI2Piano.py` — you don't normally need to type these manually.
@@ -55,8 +49,6 @@ STATUS                           reply: STATUS R <pos> L <pos>
 
 Solenoid mask is 15-bit: bit 0 = SOL 1, bit 14 = SOL 15. Example: `0x0015` = SOL 1 + SOL 3 + SOL 5.
 
----
-
 ## Calibrating steps per semitone
 
 `STEPS_PER_SEMITONE` in `src/main.cpp` needs to match your physical setup.
@@ -70,8 +62,6 @@ new value = 1096 × (164 / actual_mm)
 Update the constant and reflash.
 
 The default of 1096 assumes a NEMA17 with GT2 belt, 20-tooth pulley, 1/16 microstepping. Adjust if your setup differs.
-
----
 
 ## Dependencies
 
