@@ -641,7 +641,32 @@ def run_server(port=8000):
 
     @app.get("/")
     def health():
-        return {"status": "ok", "version": "1.8.0"}
+        try:
+            import basic_pitch  # noqa: F401
+            caps = ["voice", "instrumental", "mixed"]
+            mode = "full"
+        except ImportError:
+            caps = ["voice"]
+            mode = "lite"
+        limits = {}
+        if mode == "lite":
+            limits = {
+                "instrumental": (
+                    "Basic Pitch not installed on this server "
+                    "(4 GB memory limit). Run locally for full access."
+                ),
+                "mixed": (
+                    "Demucs not installed on this server "
+                    "(requires 4 GB+ RAM). Run locally for full access."
+                ),
+            }
+        return {
+            "status": "ok",
+            "version": "1.8.0",
+            "capabilities": caps,
+            "server_mode": mode,
+            "limits": limits,
+        }
 
     @app.get("/files/{filename}")
     def serve_file(filename: str):

@@ -1,9 +1,11 @@
 /**
- * FileMode.jsx  v7
+ * FileMode.jsx  v8
  * -----------------
- * Added: checkboxes on each track + "Play Selected" multi-track button
- * (mirrors LiveMode.jsx behaviour)
- * Improved: Waveform gets currentTime/duration for progress bar
+ * Added: capability detection from backend /health endpoint
+ *   - Fetches capabilities on mount
+ *   - Greyed-out source options with tooltip when not available on server
+ *   - Banner explaining lite-mode limits when connected to Railway
+ * Source options disabled based on server capabilities, always enabled locally
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
@@ -21,21 +23,47 @@ function noteLabel(midi) {
 }
 
 const SOURCE_OPTIONS = [
-  { id:'auto',         label:'Auto-detect',           icon:'🔍', desc:'Analyse and choose best algorithm' },
-  { id:'voice',        label:'Voice only',             icon:'🎤', desc:'Pure singing → pYIN melody MIDI' },
-  { id:'instrumental', label:'Instrumental',           icon:'🎸', desc:'Backing track → Basic Pitch polyphonic' },
-  { id:'mixed',        label:'Mixed (vocals + music)', icon:'🎵', desc:'Full song → Demucs → piano MIDI' },
+  {
+    id: 'auto',
+    label: 'Auto-detect',
+    icon: '🔍',
+    desc: 'Analyse and choose best algorithm',
+  },
+  {
+    id: 'voice',
+    label: 'Voice only',
+    icon: '🎤',
+    desc: 'Pure singing → pYIN melody MIDI',
+  },
+  {
+    id: 'instrumental',
+    label: 'Instrumental',
+    icon: '🎸',
+    desc: 'Backing track → Basic Pitch polyphonic',
+    requiresCap: 'instrumental',
+  },
+  {
+    id: 'mixed',
+    label: 'Mixed (vocals + music)',
+    icon: '🎵',
+    desc: 'Full song → Demucs → piano MIDI',
+    requiresCap: 'mixed',
+  },
 ]
 
 const SOURCE_META = {
-  voice:        { color:'#3B6CF4', label:'Voice' },
-  instrumental: { color:'#F59E0B', label:'Instrumental' },
-  mixed:        { color:'#8B5CF6', label:'Mixed' },
-  auto:         { color:'#22C55E', label:'Auto' },
+  voice:        { color: '#3B6CF4', label: 'Voice' },
+  instrumental: { color: '#F59E0B', label: 'Instrumental' },
+  mixed:        { color: '#8B5CF6', label: 'Mixed' },
+  auto:         { color: '#22C55E', label: 'Auto' },
 }
 
-const STEP_ICONS = { load:'📂', classify:'🔍', separate:'✂️', transcribe:'🎹', output:'✅' }
-const STATUS_COLORS = { running:'#F59E0B', done:'#22C55E', error:'#EF4444', skipped:'#9CA3AF' }
+const STEP_ICONS = {
+  load: '📂', classify: '🔍', separate: '✂️', transcribe: '🎹', output: '✅',
+}
+const STATUS_COLORS = {
+  running: '#F59E0B', done: '#22C55E', error: '#EF4444', skipped: '#9CA3AF',
+}
 
 function fmt(sec) {
   if (!sec || sec <= 0) return ''
@@ -58,7 +86,35 @@ export function FileMode() {
   const [vocalsUrl, setVocalsUrl] = useState(null)
   const [accumUrl, setAccumUrl] = useState(null)
 
-  // Checkboxes — which tracks are selected for multi-play
+  // Capability state — populated from /health on mount
+  const [capabilities, setCapabilities] = useState(null)  // null = unknown
+  const [serverMode, setServerMode] = useState(null)      // 'full' | 'lite' | null
+  const [serverLimits, setServerLimits] = useState({})
+
+  useEffect(() => {
+    if (!BACKEND) return
+    fetch(`${BACKEND}/`)
+      .then(r => r.json())
+      .then(data => {
+        setCapabilities(data.capabilities || ['voice', 'instrumental', 'mixed'])
+        setServerMode(data.server_mode || 'full')
+        setServerLimits(data.limits || {})
+      })
+      .catch(() => {
+        // Backend unreachable — treat as no capabilities
+        setCapabilities([])
+        setServerMode(null)
+      })
+  }, [])
+
+  const isAvailable = (optId) => {
+    // auto and voice are always available
+    if (!optId || optId === 'auto' || optId === 'voice') return true
+    // if we haven't heard from backend yet, assume available
+    if (capabilities === null) return true
+    return capabilities.includes(optId)
+  }
+
   const [checked, setChecked] = useState({ a: true, b: true, c: false, d: false })
   const [multiPlaying, setMultiPlaying] = useState(false)
 
@@ -86,13 +142,12 @@ export function FileMode() {
   const cancelMidiRef = useRef(null)
   const [comparing, setComparing] = useState(false)
 
-  const uniqueNotes = [...new Set(midiNotes.map(n => n.midi))].sort((a,b) => a-b)
+  const uniqueNotes = [...new Set(midiNotes.map(n => n.midi))].sort((a, b) => a - b)
 
   useEffect(() => {
     return () => { if (urlARef.current) URL.revokeObjectURL(urlARef.current) }
   }, [])
 
-  // ---- Audio helpers ----
   function playAudio(ref, rafRef, setTime, setPlaying) {
     if (!ref.current) return
     ref.current.currentTime = 0
@@ -157,7 +212,6 @@ export function FileMode() {
     )
   }, [playingB, midiNotes, stopAll])
 
-  // ---- Multi-track play (like LiveMode) ----
   const handleMultiPlay = useCallback(async () => {
     if (multiPlaying) { stopAll(); return }
     stopAll(); setMultiPlaying(true)
@@ -228,11 +282,14 @@ export function FileMode() {
 
   const toggleCheck = (id) => setChecked(prev => ({ ...prev, [id]: !prev[id] }))
 
-  // ---- File processing ----
   const processFile = useCallback(async (file) => {
     if (!BACKEND) {
       setStatus('error')
-      setErrorMsg('Backend not running.\n\nStart:\npython software/engine/Vocal2MIDI_file.py --server\n\n.env:\nVITE_BACKEND_URL=http://localhost:8000')
+      setErrorMsg(
+        'Backend not running.\n\n'
+        + 'Start:\npython software/engine/Vocal2MIDI_file.py --server\n\n'
+        + '.env:\nVITE_BACKEND_URL=http://localhost:8000'
+      )
       return
     }
 
@@ -257,7 +314,7 @@ export function FileMode() {
       form.append('file', file)
       form.append('source_type', sourceType)
 
-      const res = await fetch(`${BACKEND}/convert/stream`, { method:'POST', body:form })
+      const res = await fetch(`${BACKEND}/convert/stream`, { method: 'POST', body: form })
       if (!res.ok) throw new Error(`Server ${res.status}: ${await res.text()}`)
 
       const reader = res.body.getReader()
@@ -317,7 +374,8 @@ export function FileMode() {
                   setStatus('done')
                   downloadMidi(blob, `${fileStem}_output.mid`)
                 } catch (err) {
-                  setStatus('error'); setErrorMsg(`Failed to fetch MIDI: ${err.message}`)
+                  setStatus('error')
+                  setErrorMsg(`Failed to fetch MIDI: ${err.message}`)
                 }
               }
             } else if (evt.type === 'error') {
@@ -343,55 +401,132 @@ export function FileMode() {
   }, [processFile])
 
   const totalDur = midiNotes.length
-    ? (midiNotes[midiNotes.length-1].time + midiNotes[midiNotes.length-1].duration).toFixed(1)
+    ? (midiNotes[midiNotes.length - 1].time + midiNotes[midiNotes.length - 1].duration).toFixed(1)
     : '0'
 
-  const stepOrder = ['load','classify','separate','transcribe','output']
+  const stepOrder = ['load', 'classify', 'separate', 'transcribe', 'output']
   const isMixed = detectedSource === 'mixed'
 
   return (
     <div className="mode-panel">
 
+      {/* Server capability banner — only shown in lite mode */}
+      {serverMode === 'lite' && status === 'idle' && (
+        <div style={{
+          padding: '10px 14px',
+          marginBottom: 8,
+          background: 'rgba(245,158,11,0.08)',
+          border: '1px solid rgba(245,158,11,0.25)',
+          borderRadius: 8,
+          fontSize: '0.72rem',
+          color: 'var(--text2)',
+          lineHeight: 1.6,
+        }}>
+          <span style={{ color: '#F59E0B', fontWeight: 600 }}>Server mode: voice only</span>
+          {' · '}
+          Instrumental and mixed modes require Basic Pitch + Demucs
+          (4 GB+ RAM, not available on the public server).
+          {' '}
+          <span style={{ color: 'var(--text3)' }}>
+            Run locally for full access: python software/engine/Vocal2MIDI_file.py --server
+          </span>
+        </div>
+      )}
+
       {/* Source selector */}
       {status === 'idle' && (
         <div className="card">
-          <div className="card-header"><span className="card-title">Source Type</span></div>
+          <div className="card-header">
+            <span className="card-title">Source Type</span>
+          </div>
           <div className="source-selector">
-            {SOURCE_OPTIONS.map(opt => (
-              <button key={opt.id}
-                className={`source-option ${sourceType === opt.id ? 'selected' : ''}`}
-                onClick={() => setSourceType(opt.id)}>
-                <span className="mode-icon">{opt.icon}</span>
-                <span className="mode-label">{opt.label}</span>
-                <span className="mode-desc">{opt.desc}</span>
-              </button>
-            ))}
+            {SOURCE_OPTIONS.map(opt => {
+              const available = isAvailable(opt.id)
+              const limitMsg = opt.requiresCap
+                ? serverLimits[opt.requiresCap]
+                : null
+              return (
+                <div
+                  key={opt.id}
+                  style={{ position: 'relative' }}
+                  title={!available && limitMsg ? limitMsg : undefined}
+                >
+                  <button
+                    className={`source-option ${sourceType === opt.id ? 'selected' : ''}`}
+                    onClick={() => available && setSourceType(opt.id)}
+                    disabled={!available}
+                    style={!available ? {
+                      opacity: 0.38,
+                      cursor: 'not-allowed',
+                      filter: 'grayscale(0.6)',
+                    } : undefined}
+                  >
+                    <span className="mode-icon">{opt.icon}</span>
+                    <span className="mode-label">{opt.label}</span>
+                    <span className="mode-desc">
+                      {!available
+                        ? 'Not available on server — run locally'
+                        : opt.desc}
+                    </span>
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
       {/* Drop zone */}
       <div
-        className={`drop-zone ${dragging?'drag-over':''} ${status==='done'?'done':''} ${status==='error'?'errored':''}`}
-        onDragOver={e=>{e.preventDefault();setDragging(true)}}
-        onDragLeave={()=>setDragging(false)}
+        className={`drop-zone ${dragging ? 'drag-over' : ''} ${status === 'done' ? 'done' : ''} ${status === 'error' ? 'errored' : ''}`}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        onClick={()=>inputRef.current?.click()}
+        onClick={() => inputRef.current?.click()}
       >
-        <input ref={inputRef} type="file" accept={ACCEPTED} style={{display:'none'}} onChange={handleInput}/>
-        {status==='idle' && (<><div className="drop-icon">♩</div><div className="drop-primary">Drop audio file here</div><div className="drop-secondary">MP3 · WAV · FLAC · M4A · OGG</div></>)}
-        {status==='uploading' && (<><div className="drop-icon spin">⟳</div><div className="drop-primary">Processing…</div><div className="drop-secondary">{fileName}</div></>)}
-        {status==='done' && (<><div className="drop-icon ok">✓</div><div className="drop-primary">{fileName}</div><div className="drop-secondary">{midiNotes.length} notes · {totalDur}s · click to replace</div></>)}
-        {status==='error' && (<><div className="drop-icon err">!</div><div className="drop-primary">Error</div><div className="drop-secondary" style={{whiteSpace:'pre-line'}}>{errorMsg}</div></>)}
+        <input
+          ref={inputRef} type="file" accept={ACCEPTED}
+          style={{ display: 'none' }} onChange={handleInput}
+        />
+        {status === 'idle' && (
+          <><div className="drop-icon">♩</div>
+            <div className="drop-primary">Drop audio file here</div>
+            <div className="drop-secondary">MP3 · WAV · FLAC · M4A · OGG</div></>
+        )}
+        {status === 'uploading' && (
+          <><div className="drop-icon spin">⟳</div>
+            <div className="drop-primary">Processing…</div>
+            <div className="drop-secondary">{fileName}</div></>
+        )}
+        {status === 'done' && (
+          <><div className="drop-icon ok">✓</div>
+            <div className="drop-primary">{fileName}</div>
+            <div className="drop-secondary">
+              {midiNotes.length} notes · {totalDur}s · click to replace
+            </div></>
+        )}
+        {status === 'error' && (
+          <><div className="drop-icon err">!</div>
+            <div className="drop-primary">Error</div>
+            <div className="drop-secondary" style={{ whiteSpace: 'pre-line' }}>
+              {errorMsg}
+            </div></>
+        )}
       </div>
 
       {/* Pipeline */}
-      {(status==='uploading'||status==='done') && (
+      {(status === 'uploading' || status === 'done') && (
         <div className="card">
           <div className="card-header">
             <span className="card-title">Pipeline</span>
             {detectedSource && SOURCE_META[detectedSource] && (
-              <span className="card-badge" style={{background:SOURCE_META[detectedSource].color+'22',color:SOURCE_META[detectedSource].color}}>
+              <span
+                className="card-badge"
+                style={{
+                  background: SOURCE_META[detectedSource].color + '22',
+                  color: SOURCE_META[detectedSource].color,
+                }}
+              >
                 {SOURCE_META[detectedSource].label}
               </span>
             )}
@@ -403,7 +538,13 @@ export function FileMode() {
                 const st = s?.status || 'pending'
                 return (
                   <div key={key} className="pipeline-step">
-                    <div className="step-icon" style={{background:STATUS_COLORS[st]||'var(--border2)',opacity:st==='pending'?0.25:1}}>
+                    <div
+                      className="step-icon"
+                      style={{
+                        background: STATUS_COLORS[st] || 'var(--border2)',
+                        opacity: st === 'pending' ? 0.25 : 1,
+                      }}
+                    >
                       {STEP_ICONS[key]}
                     </div>
                     <div className="step-label">{key}</div>
@@ -415,13 +556,33 @@ export function FileMode() {
             {classifyData && (
               <div className="classify-metrics">
                 {[
-                  {label:'Voice ratio', val:classifyData.voice_ratio||0, display:`${((classifyData.voice_ratio||0)*100).toFixed(0)}%`, color:(classifyData.voice_ratio||0)>0.35?'#3B6CF4':'#9CA3AF'},
-                  {label:'Voice conf',  val:classifyData.voiced_conf||0,  display:(classifyData.voiced_conf||0).toFixed(2), color:(classifyData.voiced_conf||0)>0.45?'#22C55E':'#F59E0B'},
-                  {label:'Spectral BW', val:Math.min((classifyData.spectral_bw||0)/4000,1), display:`${(classifyData.spectral_bw||0).toFixed(0)} Hz`, color:(classifyData.spectral_bw||0)<2500?'#22C55E':'#8B5CF6'},
-                ].map(m=>(
+                  {
+                    label: 'Voice ratio',
+                    val: classifyData.voice_ratio || 0,
+                    display: `${((classifyData.voice_ratio || 0) * 100).toFixed(0)}%`,
+                    color: (classifyData.voice_ratio || 0) > 0.35 ? '#3B6CF4' : '#9CA3AF',
+                  },
+                  {
+                    label: 'Voice conf',
+                    val: classifyData.voiced_conf || 0,
+                    display: (classifyData.voiced_conf || 0).toFixed(2),
+                    color: (classifyData.voiced_conf || 0) > 0.45 ? '#22C55E' : '#F59E0B',
+                  },
+                  {
+                    label: 'Spectral BW',
+                    val: Math.min((classifyData.spectral_bw || 0) / 4000, 1),
+                    display: `${(classifyData.spectral_bw || 0).toFixed(0)} Hz`,
+                    color: (classifyData.spectral_bw || 0) < 2500 ? '#22C55E' : '#8B5CF6',
+                  },
+                ].map(m => (
                   <div key={m.label} className="metric-row">
                     <span className="metric-label">{m.label}</span>
-                    <div className="metric-bar-wrap"><div className="metric-bar" style={{width:`${m.val*100}%`,background:m.color}}/></div>
+                    <div className="metric-bar-wrap">
+                      <div
+                        className="metric-bar"
+                        style={{ width: `${m.val * 100}%`, background: m.color }}
+                      />
+                    </div>
                     <span className="metric-val">{m.display}</span>
                   </div>
                 ))}
@@ -433,18 +594,23 @@ export function FileMode() {
 
       {/* Source badge */}
       {detectedSource && SOURCE_META[detectedSource] && (
-        <div className="source-badge" style={{'--badge-color':SOURCE_META[detectedSource].color}}>
-          <div className="badge-dot"/>
+        <div
+          className="source-badge"
+          style={{ '--badge-color': SOURCE_META[detectedSource].color }}
+        >
+          <div className="badge-dot" />
           <span className="badge-label">{SOURCE_META[detectedSource].label}</span>
         </div>
       )}
 
       {/* Tracks */}
-      {status==='done' && midiNotes.length>0 && (
+      {status === 'done' && midiNotes.length > 0 && (
         <div className="card">
           <div className="card-header">
             <span className="card-title">
-              {isMixed ? '4 Tracks · Original + MIDI + Vocals + Accompaniment' : 'Compare · Original vs MIDI'}
+              {isMixed
+                ? '4 Tracks · Original + MIDI + Vocals + Accompaniment'
+                : 'Compare · Original vs MIDI'}
             </span>
           </div>
           <div className="compare-section">
@@ -453,17 +619,18 @@ export function FileMode() {
             <div className="track-block">
               <div className="track-header">
                 <input type="checkbox" className="track-check"
-                  checked={checked.a} onChange={() => toggleCheck('a')}/>
-                <div className="track-color-bar" style={{background:'#3B6CF4'}}/>
+                  checked={checked.a} onChange={() => toggleCheck('a')} />
+                <div className="track-color-bar" style={{ background: '#3B6CF4' }} />
                 <span className="track-name">Track A — {fileName}</span>
                 <span className="track-meta">{fmt(durA)}</span>
-                <button className="track-play-btn" style={{background:'#3B6CF4'}}
+                <button className="track-play-btn" style={{ background: '#3B6CF4' }}
                   onClick={handlePlayA} disabled={!uploadedFile}>
-                  {playingA?'■':'▶'}
+                  {playingA ? '■' : '▶'}
                 </button>
               </div>
               <div className="track-wave">
-                <Waveform audioBlob={uploadedFile} currentTime={timeA} duration={durA} color="#3B6CF4" label="AUDIO"/>
+                <Waveform audioBlob={uploadedFile} currentTime={timeA}
+                  duration={durA} color="#3B6CF4" label="AUDIO" />
               </div>
             </div>
 
@@ -471,24 +638,24 @@ export function FileMode() {
             <div className="track-block">
               <div className="track-header">
                 <input type="checkbox" className="track-check"
-                  checked={checked.b} onChange={() => toggleCheck('b')}/>
-                <div className="track-color-bar" style={{background:'#22C55E'}}/>
+                  checked={checked.b} onChange={() => toggleCheck('b')} />
+                <div className="track-color-bar" style={{ background: '#22C55E' }} />
                 <span className="track-name">Track B — {stem}_output.mid</span>
                 <span className="track-meta">{midiNotes.length} notes</span>
-                <button className="track-play-btn" style={{background:'#22C55E'}}
+                <button className="track-play-btn" style={{ background: '#22C55E' }}
                   onClick={handlePlayB} disabled={!midiNotes.length}>
-                  {playingB?'■':'▶'}
+                  {playingB ? '■' : '▶'}
                 </button>
               </div>
               <div className="track-wave">
-                <Waveform isActive={playingB} color="#22C55E" label="MIDI"/>
+                <Waveform isActive={playingB} color="#22C55E" label="MIDI" />
               </div>
-              <Piano88 activeNote={midiNote}/>
+              <Piano88 activeNote={midiNote} />
               <div className="note-chips">
-                {uniqueNotes.map(midi=>{
-                  const count = midiNotes.filter(n=>n.midi===midi).length
+                {uniqueNotes.map(midi => {
+                  const count = midiNotes.filter(n => n.midi === midi).length
                   return (
-                    <div key={midi} className={`note-chip ${midiNote===midi?'lit':''}`}>
+                    <div key={midi} className={`note-chip ${midiNote === midi ? 'lit' : ''}`}>
                       <span className="chip-name">{noteLabel(midi)}</span>
                       <span className="chip-count">×{count}</span>
                     </div>
@@ -502,17 +669,18 @@ export function FileMode() {
               <div className="track-block">
                 <div className="track-header">
                   <input type="checkbox" className="track-check"
-                    checked={checked.c} onChange={() => toggleCheck('c')}/>
-                  <div className="track-color-bar" style={{background:'#F472B6'}}/>
+                    checked={checked.c} onChange={() => toggleCheck('c')} />
+                  <div className="track-color-bar" style={{ background: '#F472B6' }} />
                   <span className="track-name">Track C — Vocals</span>
                   <span className="track-meta">{fmt(durC)}</span>
-                  <button className="track-play-btn" style={{background:'#F472B6'}}
+                  <button className="track-play-btn" style={{ background: '#F472B6' }}
                     onClick={handlePlayC}>
-                    {playingC?'■':'▶'}
+                    {playingC ? '■' : '▶'}
                   </button>
                 </div>
                 <div className="track-wave">
-                  <Waveform currentTime={timeC} duration={durC} color="#F472B6" label="VOCALS"/>
+                  <Waveform currentTime={timeC} duration={durC}
+                    color="#F472B6" label="VOCALS" />
                 </div>
               </div>
             )}
@@ -522,32 +690,39 @@ export function FileMode() {
               <div className="track-block">
                 <div className="track-header">
                   <input type="checkbox" className="track-check"
-                    checked={checked.d} onChange={() => toggleCheck('d')}/>
-                  <div className="track-color-bar" style={{background:'#FB923C'}}/>
+                    checked={checked.d} onChange={() => toggleCheck('d')} />
+                  <div className="track-color-bar" style={{ background: '#FB923C' }} />
                   <span className="track-name">Track D — Accompaniment</span>
                   <span className="track-meta">{fmt(durD)}</span>
-                  <button className="track-play-btn" style={{background:'#FB923C'}}
+                  <button className="track-play-btn" style={{ background: '#FB923C' }}
                     onClick={handlePlayD}>
-                    {playingD?'■':'▶'}
+                    {playingD ? '■' : '▶'}
                   </button>
                 </div>
                 <div className="track-wave">
-                  <Waveform currentTime={timeD} duration={durD} color="#FB923C" label="ACCOM"/>
+                  <Waveform currentTime={timeD} duration={durD}
+                    color="#FB923C" label="ACCOM" />
                 </div>
               </div>
             )}
 
-            <div className="compare-btn-row" style={{flexDirection:'column', gap:8}}>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <span style={{fontSize:'0.68rem',color:'var(--text3)',fontFamily:'var(--font-mono)'}}>
+            <div className="compare-btn-row" style={{ flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: '0.68rem', color: 'var(--text3)',
+                  fontFamily: 'var(--font-mono)',
+                }}>
                   Play checked tracks together:
                 </span>
                 <button className="compare-toggle" onClick={handleMultiPlay}
                   disabled={!Object.values(checked).some(Boolean)}>
                   ⇄ {multiPlaying ? 'Stop' : 'Play Selected'}
                 </button>
-                <button className="btn btn-outline" style={{marginLeft:'auto'}}
-                  onClick={()=>downloadMidi(midiBlob,`${stem}_output.mid`)}>
+                <button
+                  className="btn btn-outline"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => downloadMidi(midiBlob, `${stem}_output.mid`)}
+                >
                   ↓ Download MIDI
                 </button>
               </div>
@@ -556,9 +731,9 @@ export function FileMode() {
         </div>
       )}
 
-      <audio ref={audioRefA} style={{display:'none'}}/>
-      <audio ref={audioRefC} style={{display:'none'}}/>
-      <audio ref={audioRefD} style={{display:'none'}}/>
+      <audio ref={audioRefA} style={{ display: 'none' }} />
+      <audio ref={audioRefC} style={{ display: 'none' }} />
+      <audio ref={audioRefD} style={{ display: 'none' }} />
     </div>
   )
 }
