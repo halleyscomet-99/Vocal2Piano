@@ -16,7 +16,7 @@ SOURCE TYPES  (POST form field: source_type)
   auto          pYIN + spectral analysis auto-detect
   voice         pYIN monophonic melody MIDI
   instrumental  Basic Pitch ONNX polyphonic MIDI
-  mixed         Demucs --two-stems vocals → Basic Pitch on no_vocals.wav
+  mixed         Demucs --two-stems vocals -> Basic Pitch on no_vocals.wav
 
 ENDPOINTS
 ---------
@@ -81,12 +81,14 @@ async def classify_audio_source(audio, sr, emit):
     )
 
     if sr != 22050:
-        audio_22k = librosa.resample(audio, orig_sr=sr, target_sr=22050)
+        audio_22k = librosa.resample(
+            audio, orig_sr=sr, target_sr=22050
+        )
         sr_22k = 22050
     else:
         audio_22k, sr_22k = audio, sr
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _classify():
         f0_arr, voiced_flag, voiced_prob = librosa.pyin(
@@ -97,14 +99,20 @@ async def classify_audio_source(audio, sr, emit):
             hop_length=256,
             fill_na=None,
         )
-        vr = float(np.mean(voiced_flag)) if voiced_flag is not None else 0.0
+        vr = (
+            float(np.mean(voiced_flag))
+            if voiced_flag is not None
+            else 0.0
+        )
         if voiced_prob is not None and voiced_flag is not None:
             mask = voiced_flag & ~np.isnan(voiced_prob)
             vp = voiced_prob[mask]
             mc = float(np.mean(vp)) if len(vp) > 0 else 0.0
         else:
             mc = 0.0
-        sb = librosa.feature.spectral_bandwidth(y=audio_22k, sr=sr_22k)
+        sb = librosa.feature.spectral_bandwidth(
+            y=audio_22k, sr=sr_22k
+        )
         mb = float(np.mean(sb))
         return vr, mc, mb
 
@@ -129,7 +137,9 @@ async def classify_audio_source(audio, sr, emit):
         type="step",
         step="classify",
         status="done",
-        detail=f"voice_ratio={vr:.0%}  conf={mc:.2f}  bw={mb:.0f} Hz",
+        detail=(
+            f"voice_ratio={vr:.0%}  conf={mc:.2f}  bw={mb:.0f} Hz"
+        ),
         result=source,
         voice_ratio=round(vr, 3),
         voiced_conf=round(mc, 3),
@@ -154,7 +164,7 @@ async def separate_sources_async(input_path, output_dir, stem, emit):
       output_dir/htdemucs/<stem>/vocals.wav
       output_dir/htdemucs/<stem>/no_vocals.wav
 
-    Copies both to OUTPUT_DIR with stem-prefixed names for /files/ serving.
+    Copies both to OUTPUT_DIR with stem-prefixed names for /files/.
     """
     await emit(
         type="step",
@@ -163,7 +173,7 @@ async def separate_sources_async(input_path, output_dir, stem, emit):
         detail="Demucs htdemucs: separating vocals / accompaniment...",
     )
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _run():
         return subprocess.run(
@@ -198,7 +208,12 @@ async def separate_sources_async(input_path, output_dir, stem, emit):
         )
         return None
     except Exception as exc:
-        await emit(type="step", step="separate", status="error", detail=str(exc)[:200])
+        await emit(
+            type="step",
+            step="separate",
+            status="error",
+            detail=str(exc)[:200],
+        )
         return None
 
     if result.returncode != 0:
@@ -213,7 +228,9 @@ async def separate_sources_async(input_path, output_dir, stem, emit):
         return None
 
     # Find output files -- search recursively in case version differs
-    no_vocals = Path(output_dir) / "htdemucs" / stem / "no_vocals.wav"
+    no_vocals = (
+        Path(output_dir) / "htdemucs" / stem / "no_vocals.wav"
+    )
     vocals = Path(output_dir) / "htdemucs" / stem / "vocals.wav"
 
     if not no_vocals.exists():
@@ -272,22 +289,27 @@ async def run_basic_pitch_async(input_path, output_path, emit):
     )
 
     try:
-        from basic_pitch.inference import predict_and_save  # noqa: PLC0415
+        from basic_pitch.inference import (  # noqa: PLC0415
+            predict_and_save,
+        )
         import basic_pitch as _bp  # noqa: PLC0415
     except ImportError as exc:
-        raise RuntimeError("pip install 'basic-pitch[onnx]' onnxruntime") from exc
+        raise RuntimeError(
+            "pip install 'basic-pitch[onnx]' onnxruntime"
+        ) from exc
 
     bp_dir = Path(_bp.__file__).parent
-    onnx_path = bp_dir / "saved_models" / "icassp_2022" / "nmp.onnx"
+    onnx_path = (
+        bp_dir / "saved_models" / "icassp_2022" / "nmp.onnx"
+    )
     if not onnx_path.exists():
         raise RuntimeError(f"ONNX model not found: {onnx_path}")
 
-    # Capture paths before entering executor
     _in = str(input_path)
     _out = str(output_path)
     _onnx = str(onnx_path)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     tmp_out = tempfile.mkdtemp(prefix="bp_out_")
 
     def _run():
@@ -302,7 +324,9 @@ async def run_basic_pitch_async(input_path, output_path, emit):
         )
         midi_files = list(Path(tmp_out).rglob("*.mid"))
         if not midi_files:
-            raise RuntimeError("Basic Pitch produced no MIDI output.")
+            raise RuntimeError(
+                "Basic Pitch produced no MIDI output."
+            )
         shutil.copy2(str(midi_files[0]), _out)
 
     try:
@@ -339,10 +363,14 @@ async def run_pyin_async(input_path, output_path, emit):
 
     _in = str(input_path)
     _out = str(output_path)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _run():
-        from pretty_midi import PrettyMIDI, Instrument, Note  # noqa: PLC0415
+        from pretty_midi import (  # noqa: PLC0415
+            PrettyMIDI,
+            Instrument,
+            Note,
+        )
 
         audio, sr = librosa.load(_in, sr=44100, mono=True)
         hop = 256
@@ -364,20 +392,39 @@ async def run_pyin_async(input_path, output_path, emit):
             zip(f0_arr or [], voiced_flag or [], voiced_prob or [])
         ):
             t = i * hop_sec
-            ok = f0 is not None and not np.isnan(f0) and v and p >= PYIN_CONF_MIN
+            ok = (
+                f0 is not None
+                and not np.isnan(f0)
+                and v
+                and p >= PYIN_CONF_MIN
+            )
             mn = -1
             if ok:
                 raw = 12 * np.log2(f0 / 440.0) + 69
                 mn = int(np.clip(round(raw) - 12, 21, 108))
             if mn != prev:
                 if prev >= 0 and t - t0 > 0.04:
-                    inst.notes.append(Note(velocity=80, pitch=prev, start=t0, end=t))
+                    inst.notes.append(
+                        Note(
+                            velocity=80,
+                            pitch=prev,
+                            start=t0,
+                            end=t,
+                        )
+                    )
                 prev = mn
                 t0 = t
         if prev >= 0:
             end = len(f0_arr or []) * hop_sec
             if end - t0 > 0.04:
-                inst.notes.append(Note(velocity=80, pitch=prev, start=t0, end=end))
+                inst.notes.append(
+                    Note(
+                        velocity=80,
+                        pitch=prev,
+                        start=t0,
+                        end=end,
+                    )
+                )
         midi_obj.instruments.append(inst)
         midi_obj.write(_out)
         return len(inst.notes)
@@ -397,7 +444,9 @@ async def run_pyin_async(input_path, output_path, emit):
 # =============================================================================
 
 
-async def _convert_core(input_path, output_path, emit, source_type="auto"):
+async def _convert_core(
+    input_path, output_path, emit, source_type="auto"
+):
     """
     Full conversion pipeline.
 
@@ -419,7 +468,7 @@ async def _convert_core(input_path, output_path, emit, source_type="auto"):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Copy to persistent INPUT_DIR -- this is the path we pass everywhere
+    # Copy to persistent INPUT_DIR before any processing
     persistent = INPUT_DIR / input_path.name
     shutil.copy2(str(input_path), str(persistent))
     print(f"Input saved -> {persistent}")
@@ -430,16 +479,20 @@ async def _convert_core(input_path, output_path, emit, source_type="auto"):
 
     print(f"Convert: {persistent.name}  source={source_type}")
 
-    await emit(type="step", step="load", status="done", detail=persistent.name)
+    await emit(
+        type="step", step="load", status="done",
+        detail=persistent.name,
+    )
 
     vocals_file = None
     accom_file = None
 
     if source_type == "auto":
-        loop = asyncio.get_event_loop()
-        audio, sr = await loop.run_in_executor(
-            None, lambda: librosa.load(str(persistent), sr=44100, mono=True)
-        )
+        loop = asyncio.get_running_loop()
+
+        def _load_audio():
+            return librosa.load(str(persistent), sr=44100, mono=True)
+        audio, sr = await loop.run_in_executor(None, _load_audio)
         source_type = await classify_audio_source(audio, sr, emit)
     else:
         await emit(
@@ -451,17 +504,23 @@ async def _convert_core(input_path, output_path, emit, source_type="auto"):
         )
 
     if source_type == "voice":
-        await run_pyin_async(str(persistent), str(output_path), emit)
+        await run_pyin_async(
+            str(persistent), str(output_path), emit
+        )
 
     elif source_type == "instrumental":
-        await run_basic_pitch_async(str(persistent), str(output_path), emit)
+        await run_basic_pitch_async(
+            str(persistent), str(output_path), emit
+        )
 
     else:  # mixed
         stems = await separate_sources_async(
             str(persistent), str(OUTPUT_DIR), stem, emit
         )
         if stems and os.path.exists(stems["accompaniment"]):
-            await run_basic_pitch_async(stems["accompaniment"], str(output_path), emit)
+            await run_basic_pitch_async(
+                stems["accompaniment"], str(output_path), emit
+            )
             vocals_file = Path(stems["vocals"]).name
             accom_file = Path(stems["accompaniment"]).name
         else:
@@ -472,7 +531,9 @@ async def _convert_core(input_path, output_path, emit, source_type="auto"):
                 status="skipped",
                 detail="Separation failed -- using full mix",
             )
-            await run_basic_pitch_async(str(persistent), str(output_path), emit)
+            await run_basic_pitch_async(
+                str(persistent), str(output_path), emit
+            )
 
     await emit(
         type="step",
@@ -501,7 +562,9 @@ async def _convert_core(input_path, output_path, emit, source_type="auto"):
 # =============================================================================
 
 
-def convert_file_sync(input_path, output_path=None, source_type="auto"):
+def convert_file_sync(
+    input_path, output_path=None, source_type="auto"
+):
     """Synchronous wrapper for command-line use."""
 
     async def _run():
@@ -518,7 +581,9 @@ def convert_file_sync(input_path, output_path=None, source_type="auto"):
                 item = await asyncio.wait_for(q.get(), timeout=0.2)
                 step = item.get("step", item.get("type", "?"))
                 stat = item.get("status", item.get("type", "?"))
-                print(f"  [{step}][{stat}] {item.get('detail', '')}")
+                print(
+                    f"  [{step}][{stat}] {item.get('detail', '')}"
+                )
             except asyncio.TimeoutError:
                 pass
         return await task
@@ -534,7 +599,7 @@ def convert_file_sync(input_path, output_path=None, source_type="auto"):
 def run_server(port=8000):
     """
     FastAPI SSE server.
-    POST /convert/stream  accepts: file (upload), source_type (form field)
+    POST /convert/stream  accepts: file (upload), source_type (form)
     GET  /files/{filename}  serves MIDI and WAV stems from OUTPUT_DIR
     """
     try:
@@ -546,11 +611,18 @@ def run_server(port=8000):
             UploadFile,
             HTTPException,
         )
-        from fastapi.middleware.cors import CORSMiddleware  # noqa: PLC0415
-        from fastapi.responses import StreamingResponse, FileResponse  # noqa: PLC0415
+        from fastapi.middleware.cors import (  # noqa: PLC0415
+            CORSMiddleware,
+        )
+        from fastapi.responses import (  # noqa: PLC0415
+            StreamingResponse,
+            FileResponse,
+        )
         from typing import Optional  # noqa: PLC0415
     except ImportError as exc:
-        raise RuntimeError("pip install fastapi uvicorn python-multipart") from exc
+        raise RuntimeError(
+            "pip install fastapi uvicorn python-multipart"
+        ) from exc
 
     app = FastAPI(title="Voice2Piano", version="1.8.0")
 
@@ -567,16 +639,25 @@ def run_server(port=8000):
 
     @app.get("/files/{filename}")
     def serve_file(filename: str):
-        """Serve output files (MIDI, separated WAV stems) by name."""
+        """Serve output files (MIDI, WAV stems) by name."""
         path = OUTPUT_DIR / filename
         if not path.exists() or not path.is_file():
-            raise HTTPException(status_code=404, detail=f"{filename} not found")
+            raise HTTPException(
+                status_code=404,
+                detail=f"{filename} not found",
+            )
         try:
             path.resolve().relative_to(OUTPUT_DIR)
         except ValueError:
             raise HTTPException(status_code=403, detail="Forbidden")
-        media = "audio/midi" if filename.endswith(".mid") else "audio/wav"
-        return FileResponse(str(path), media_type=media, filename=filename)
+        media = (
+            "audio/midi"
+            if filename.endswith(".mid")
+            else "audio/wav"
+        )
+        return FileResponse(
+            str(path), media_type=media, filename=filename
+        )
 
     @app.post("/convert/stream")
     async def convert_stream(
@@ -587,12 +668,15 @@ def run_server(port=8000):
         SSE conversion endpoint.
 
         Writes the upload to a tmp file, then _convert_core copies it
-        to INPUT_DIR (persistent) immediately.  The tmp dir is cleaned up
+        to INPUT_DIR (persistent) immediately.  The tmp dir is cleaned
         after the SSE stream ends -- INPUT_DIR copy is never deleted.
         """
         ext = Path(file.filename or "").suffix.lower()
         if ext not in ACCEPTED_EXTENSIONS:
-            raise HTTPException(status_code=415, detail=f"Unsupported '{ext}'")
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported '{ext}'",
+            )
         valid = {"auto", "voice", "instrumental", "mixed"}
         if source_type not in valid:
             source_type = "auto"
@@ -610,26 +694,30 @@ def run_server(port=8000):
             async def emit(**kwargs):
                 await q.put(kwargs)
 
-            task = asyncio.create_task(_convert_core(in_path, None, emit, source_type))
+            task = asyncio.create_task(
+                _convert_core(in_path, None, emit, source_type)
+            )
 
             try:
                 while True:
                     try:
-                        item = await asyncio.wait_for(q.get(), timeout=0.15)
+                        item = await asyncio.wait_for(
+                            q.get(), timeout=0.15
+                        )
                         yield f"data: {json.dumps(item)}\n\n"
                         if item.get("type") in ("done", "error"):
                             break
                     except asyncio.TimeoutError:
                         if task.done():
-                            # Drain any remaining queued items
                             while not q.empty():
                                 item = q.get_nowait()
-                                yield f"data: {json.dumps(item)}\n\n"
+                                yield (
+                                    f"data: {json.dumps(item)}\n\n"
+                                )
                             break
                         # Keep connection alive while processing
                         yield ": keepalive\n\n"
 
-                # Surface any uncaught exception as an error event
                 if task.done() and not task.cancelled():
                     exc = task.exception()
                     if exc is not None:
@@ -649,12 +737,14 @@ def run_server(port=8000):
                 traceback.print_exc()
                 yield (
                     "data: "
-                    + json.dumps({"type": "error", "detail": str(exc)})
+                    + json.dumps(
+                        {"type": "error", "detail": str(exc)}
+                    )
                     + "\n\n"
                 )
             finally:
                 # Only delete the tmp upload dir.
-                # INPUT_DIR copy is persistent (never cleaned up here).
+                # INPUT_DIR copy is persistent -- never cleaned here.
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
         return StreamingResponse(
@@ -736,7 +826,9 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    result = convert_file_sync(args.input, args.output, args.source)
+    result = convert_file_sync(
+        args.input, args.output, args.source
+    )
     if args.play:
         play_midi(result["midi_path"])
 

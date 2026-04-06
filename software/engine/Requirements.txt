@@ -1,0 +1,9 @@
+librosa
+numpy
+fastapi
+uvicorn[standard]
+python-multipart
+basic-pitch[onnx]
+onnxruntime
+demucs
+pretty_midi

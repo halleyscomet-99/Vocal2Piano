@@ -1,196 +1,324 @@
 /**
- * Waveform.jsx
- * ------------
- * Canvas waveform renderer.  Two modes:
+ * Waveform.jsx  v3
+ * -----------------
+ * Two modes:
  *
- *   Live mode (analyserNode != null):
- *     Reads the Web Audio AnalyserNode every animation frame and
- *     draws the real-time time-domain waveform + FFT spectrum.
+ *   LIVE (analyserNode prop):
+ *     Reads AnalyserNode every rAF.
+ *     Draws time-domain waveform + subtle FFT bars.
+ *     No progress bar (real time).
  *
- *   Playback mode (audioBlob != null):
- *     Decodes the audio blob once, renders a static waveform of
- *     the full recording, and draws a playhead that moves with
- *     the currentTime prop.
+ *   PLAYBACK (audioBlob or isActive prop):
+ *     Decodes audioBlob once → draws static waveform.
+ *     Progress bar overlay moves with currentTime / duration.
+ *     Falls back to animated bars when no blob (MIDI playback).
  *
- * Props
- * -----
- * analyserNode  AnalyserNode | null   live Web Audio analyser
- * isActive      boolean               animate the live waveform
- * audioBlob     Blob | null           decoded for static display
- * currentTime   number                playhead position in seconds
- * duration      number                total audio duration
- * color         string                waveform line colour
- * label         string                top-left overlay label
+ * Improvements in v3:
+ *   - Waveform amplitude scaled up (×2.2) so quiet signals are visible
+ *   - Filled waveform below centerline for visual weight
+ *   - Progress bar: translucent tint + bright tick line
+ *   - MIDI playback mode: animated bouncing bars
  */
 
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useCallback } from 'react'
+
+const H = 72        // canvas height px
+const BAR_W = 2     // FFT bar width
+const BAR_GAP = 1   // FFT bar gap
+const AMP_SCALE = 2.2  // amplify waveform so quiet signals are visible
 
 export function Waveform({
   analyserNode = null,
-  isActive = false,
   audioBlob = null,
   currentTime = 0,
   duration = 0,
-  color = '#4D9CFF',
+  isActive = false,
+  color = '#3B6CF4',
   label = '',
 }) {
   const canvasRef = useRef(null)
   const rafRef = useRef(null)
-  const staticDataRef = useRef(null)   // decoded PCM for static waveform
+  const staticDataRef = useRef(null)   // decoded Float32Array for static mode
+  const blobRef = useRef(null)
 
-  // Decode audio blob into PCM data for static rendering
+  // ---- decode blob once ----
   useEffect(() => {
-    if (!audioBlob) { staticDataRef.current = null; return }
-    const ctx = new AudioContext()
-    audioBlob.arrayBuffer().then(buf => ctx.decodeAudioData(buf)).then(decoded => {
-      // Down-sample to canvas width for rendering
-      staticDataRef.current = decoded.getChannelData(0)
-    }).catch(() => {
-      staticDataRef.current = null
-    })
+    if (!audioBlob || audioBlob === blobRef.current) return
+    blobRef.current = audioBlob
+    staticDataRef.current = null
+
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const ctx = new OfflineAudioContext(1, 1, 44100)
+        const buf = await ctx.decodeAudioData(e.target.result)
+        const raw = buf.getChannelData(0)
+        // Downsample to ~600 points
+        const step = Math.max(1, Math.floor(raw.length / 600))
+        const pts = []
+        for (let i = 0; i < raw.length; i += step) {
+          let max = 0
+          for (let j = i; j < Math.min(i + step, raw.length); j++) {
+            max = Math.max(max, Math.abs(raw[j]))
+          }
+          pts.push(max)
+        }
+        staticDataRef.current = pts
+      } catch {}
+    }
+    reader.readAsArrayBuffer(audioBlob)
   }, [audioBlob])
 
-  // Draw loop
+  // ---- draw static waveform ----
+  const drawStatic = useCallback((canvas, progress) => {
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width
+    const cy = H / 2
+    ctx.clearRect(0, 0, W, H)
+
+    const pts = staticDataRef.current
+    if (!pts || pts.length === 0) {
+      drawPlaceholder(ctx, W, color)
+    } else {
+      // Background
+      ctx.fillStyle = '#0F1728'
+      ctx.fillRect(0, 0, W, H)
+
+      const step = W / pts.length
+      const progressX = progress * W
+
+      // Played region (brighter)
+      ctx.fillStyle = color + 'CC'
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.moveTo(0, cy)
+      for (let i = 0; i < pts.length; i++) {
+        const x = i * step
+        const amp = Math.min(pts[i] * AMP_SCALE, 1.0) * (cy - 4)
+        if (x <= progressX) {
+          ctx.lineTo(x, cy - amp)
+        }
+      }
+      for (let i = pts.length - 1; i >= 0; i--) {
+        const x = i * step
+        const amp = Math.min(pts[i] * AMP_SCALE, 1.0) * (cy - 4)
+        if (x <= progressX) {
+          ctx.lineTo(x, cy + amp)
+        }
+      }
+      ctx.closePath()
+      ctx.fill()
+
+      // Unplayed region (dimmer)
+      ctx.fillStyle = color + '33'
+      ctx.beginPath()
+      ctx.moveTo(progressX, cy)
+      for (let i = 0; i < pts.length; i++) {
+        const x = i * step
+        if (x >= progressX) {
+          const amp = Math.min(pts[i] * AMP_SCALE, 1.0) * (cy - 4)
+          ctx.lineTo(x, cy - amp)
+        }
+      }
+      for (let i = pts.length - 1; i >= 0; i--) {
+        const x = i * step
+        if (x >= progressX) {
+          const amp = Math.min(pts[i] * AMP_SCALE, 1.0) * (cy - 4)
+          ctx.lineTo(x, cy + amp)
+        }
+      }
+      ctx.closePath()
+      ctx.fill()
+
+      // Centerline
+      ctx.strokeStyle = color + '20'
+      ctx.lineWidth = 0.5
+      ctx.beginPath()
+      ctx.moveTo(0, cy)
+      ctx.lineTo(W, cy)
+      ctx.stroke()
+    }
+
+    // Progress tint overlay
+    if (progress > 0) {
+      ctx.fillStyle = color + '18'
+      ctx.fillRect(0, 0, progress * W, H)
+      // Bright tick
+      ctx.fillStyle = color
+      ctx.fillRect(Math.max(0, progress * W - 1.5), 0, 2, H)
+    }
+
+    // Label
+    if (label) {
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'
+      ctx.font = '500 10px "IBM Plex Mono", monospace'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(label, 10, 7)
+    }
+  }, [color, label])
+
+  // ---- draw placeholder (no blob yet) ----
+  function drawPlaceholder(ctx, W, col) {
+    ctx.fillStyle = '#0F1728'
+    ctx.fillRect(0, 0, W, H)
+    const cy = H / 2
+    ctx.strokeStyle = col + '30'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(0, cy)
+    ctx.lineTo(W, cy)
+    ctx.stroke()
+  }
+
+  // ---- draw MIDI animated bars ----
+  const drawMidiBars = useCallback((canvas, t) => {
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width
+    ctx.clearRect(0, 0, W, H)
+    ctx.fillStyle = '#0F1728'
+    ctx.fillRect(0, 0, W, H)
+
+    const total = Math.floor(W / (BAR_W + BAR_GAP))
+    for (let i = 0; i < total; i++) {
+      const phase = (i / total) * Math.PI * 2 + t * 3.5
+      const amp = (Math.sin(phase) * 0.5 + 0.5) * (H * 0.38) + H * 0.08
+      const x = i * (BAR_W + BAR_GAP)
+      const alpha = 0.3 + Math.sin(phase) * 0.25
+      ctx.fillStyle = color + Math.round(alpha * 255).toString(16).padStart(2, '0')
+      ctx.fillRect(x, (H - amp) / 2, BAR_W, amp)
+    }
+
+    if (label) {
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'
+      ctx.font = '500 10px "IBM Plex Mono", monospace'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(label, 10, 7)
+    }
+  }, [color, label])
+
+  // ---- draw live analyser ----
+  const drawLive = useCallback((canvas, analyser) => {
+    const ctx = canvas.getContext('2d')
+    const W = canvas.width
+    const cy = H / 2
+
+    ctx.clearRect(0, 0, W, H)
+    ctx.fillStyle = '#0F1728'
+    ctx.fillRect(0, 0, W, H)
+
+    const timeBuf = new Float32Array(analyser.fftSize)
+    analyser.getFloatTimeDomainData(timeBuf)
+
+    // Filled waveform
+    ctx.fillStyle = color + '55'
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    const sliceW = W / timeBuf.length
+    ctx.moveTo(0, cy)
+    for (let i = 0; i < timeBuf.length; i++) {
+      const v = Math.max(-1, Math.min(1, timeBuf[i] * AMP_SCALE))
+      ctx.lineTo(i * sliceW, cy - v * (cy - 4))
+    }
+    for (let i = timeBuf.length - 1; i >= 0; i--) {
+      const v = Math.max(-1, Math.min(1, timeBuf[i] * AMP_SCALE))
+      ctx.lineTo(i * sliceW, cy + v * (cy - 4))
+    }
+    ctx.closePath()
+    ctx.fill()
+    // outline
+    ctx.beginPath()
+    for (let i = 0; i < timeBuf.length; i++) {
+      const v = Math.max(-1, Math.min(1, timeBuf[i] * AMP_SCALE))
+      const x = i * sliceW
+      const y = cy - v * (cy - 4)
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+
+    // Subtle FFT bars at bottom
+    const freqBuf = new Uint8Array(analyser.frequencyBinCount)
+    analyser.getByteFrequencyData(freqBuf)
+    const barCount = 80
+    const barW = W / barCount
+    for (let i = 0; i < barCount; i++) {
+      const idx = Math.floor((i / barCount) * freqBuf.length * 0.4)
+      const amp = (freqBuf[idx] / 255) * H * 0.22
+      ctx.fillStyle = color + '44'
+      ctx.fillRect(i * barW, H - amp, barW - 1, amp)
+    }
+
+    if (label) {
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'
+      ctx.font = '500 10px "IBM Plex Mono", monospace'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(label, 10, 7)
+    }
+  }, [color, label])
+
+  // ---- animation loop ----
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const W = canvas.width
-    const H = canvas.height
-    const mid = H * 0.55
 
-    let timeBuf = null
-    let freqBuf = null
-
-    function drawBackground() {
-      ctx.fillStyle = '#0F1728'
-      ctx.fillRect(0, 0, W, H)
-      // Subtle grid lines
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)'
-      ctx.lineWidth = 0.5
-      for (let y = 0; y < H; y += H / 4) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+    if (analyserNode) {
+      // Live mode
+      const loop = () => {
+        drawLive(canvas, analyserNode)
+        rafRef.current = requestAnimationFrame(loop)
       }
+      rafRef.current = requestAnimationFrame(loop)
+      return () => cancelAnimationFrame(rafRef.current)
     }
 
-    function drawIdle() {
-      drawBackground()
-      ctx.strokeStyle = `${color}30`
-      ctx.lineWidth = 1
-      ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke()
+    if (isActive && !audioBlob) {
+      // MIDI playback — animated bars
+      const start = performance.now()
+      const loop = () => {
+        drawMidiBars(canvas, (performance.now() - start) / 1000)
+        rafRef.current = requestAnimationFrame(loop)
+      }
+      rafRef.current = requestAnimationFrame(loop)
+      return () => cancelAnimationFrame(rafRef.current)
     }
 
-    function drawLive() {
-      if (!analyserNode) return
-      const bufLen = analyserNode.frequencyBinCount
-
-      if (!timeBuf || timeBuf.length !== bufLen) timeBuf = new Float32Array(bufLen)
-      if (!freqBuf || freqBuf.length !== bufLen) freqBuf = new Uint8Array(bufLen)
-
-      analyserNode.getFloatTimeDomainData(timeBuf)
-      analyserNode.getByteFrequencyData(freqBuf)
-
-      drawBackground()
-
-      // Frequency bars (bottom 35%)
-      const barW = W / 128
-      const specH = H * 0.35
-      for (let i = 0; i < 128; i++) {
-        const v = freqBuf[i] / 255
-        const bh = v * specH
-        ctx.fillStyle = `${color}${Math.round((0.25 + v * 0.55) * 255).toString(16).padStart(2, '0')}`
-        ctx.fillRect(i * barW, H - bh, barW - 0.5, bh)
-      }
-
-      // Time-domain waveform
-      ctx.strokeStyle = color
-      ctx.lineWidth = 1.5
-      ctx.shadowColor = color
-      ctx.shadowBlur = 6
-      ctx.beginPath()
-      const step = W / bufLen
-      for (let i = 0; i < bufLen; i++) {
-        const x = i * step
-        const y = mid - timeBuf[i] * mid * 0.8
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-      ctx.shadowBlur = 0
-
-      rafRef.current = requestAnimationFrame(drawLive)
-    }
-
-    function drawStatic() {
-      drawBackground()
-      const data = staticDataRef.current
-      if (!data) { drawIdle(); return }
-
-      // Draw full waveform
-      const step = Math.floor(data.length / W)
-      ctx.strokeStyle = `${color}70`
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      for (let x = 0; x < W; x++) {
-        const i = x * step
-        const v = data[i] || 0
-        const y = mid - v * mid * 0.85
-        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-
-      // Played portion (brighter)
-      const playX = duration > 0 ? (currentTime / duration) * W : 0
-      ctx.save()
-      ctx.beginPath()
-      ctx.rect(0, 0, playX, H)
-      ctx.clip()
-      ctx.strokeStyle = color
-      ctx.lineWidth = 1.5
-      ctx.beginPath()
-      for (let x = 0; x < W; x++) {
-        const i = x * step
-        const v = data[i] || 0
-        const y = mid - v * mid * 0.85
-        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-      ctx.restore()
-
-      // Playhead
-      if (playX > 0) {
-        ctx.strokeStyle = '#FFFFFF'
-        ctx.lineWidth = 1.5
-        ctx.globalAlpha = 0.8
-        ctx.beginPath()
-        ctx.moveTo(playX, 0); ctx.lineTo(playX, H)
-        ctx.stroke()
-        ctx.globalAlpha = 1
-      }
-    }
-
-    if (isActive && analyserNode) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      rafRef.current = requestAnimationFrame(drawLive)
+    // Static / playback mode
+    const progress = duration > 0 ? Math.min(currentTime / duration, 1) : 0
+    if (audioBlob && staticDataRef.current) {
+      drawStatic(canvas, progress)
     } else if (audioBlob) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      drawStatic()
+      // Not decoded yet -- try again shortly
+      const t = setTimeout(() => {
+        if (staticDataRef.current) drawStatic(canvas, progress)
+      }, 200)
+      return () => clearTimeout(t)
     } else {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      drawIdle()
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#0F1728'
+      ctx.fillRect(0, 0, canvas.width, H)
+      if (label) {
+        ctx.fillStyle = 'rgba(255,255,255,0.18)'
+        ctx.font = '500 10px "IBM Plex Mono", monospace'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'top'
+        ctx.fillText(label, 10, 7)
+      }
     }
-
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
-  }, [analyserNode, isActive, audioBlob, currentTime, duration, color])
+  }, [analyserNode, audioBlob, currentTime, duration, isActive,
+      drawLive, drawStatic, drawMidiBars, label])
 
   return (
     <div className="waveform-wrap">
       <canvas
         ref={canvasRef}
-        width={1040}
-        height={88}
-        style={{ width: '100%', height: '88px', display: 'block' }}
+        width={1200}
+        height={H}
+        style={{ width: '100%', height: `${H}px`, display: 'block' }}
       />
-      {label && <div className="waveform-label">{label}</div>}
     </div>
   )
 }

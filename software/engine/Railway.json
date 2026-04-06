@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "python Vocal2MIDI_file.py --server --port $PORT",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

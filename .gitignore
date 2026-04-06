@@ -87,3 +87,4 @@ software/files/output/
 
 # Learned Markov weights (generated, not source)
 learned_transitions.json
+.vercel

@@ -1,7 +1,9 @@
 /**
- * FileMode.jsx  v6
- * All duration values default to 0, never undefined.
- * No stale closures. SSE fully wrapped in try-catch.
+ * FileMode.jsx  v7
+ * -----------------
+ * Added: checkboxes on each track + "Play Selected" multi-track button
+ * (mirrors LiveMode.jsx behaviour)
+ * Improved: Waveform gets currentTime/duration for progress bar
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
@@ -36,7 +38,6 @@ const STEP_ICONS = { load:'📂', classify:'🔍', separate:'✂️', transcribe
 const STATUS_COLORS = { running:'#F59E0B', done:'#22C55E', error:'#EF4444', skipped:'#9CA3AF' }
 
 function fmt(sec) {
-  // Safe formatter -- returns '' if sec is falsy
   if (!sec || sec <= 0) return ''
   return `${Number(sec).toFixed(1)}s`
 }
@@ -57,25 +58,22 @@ export function FileMode() {
   const [vocalsUrl, setVocalsUrl] = useState(null)
   const [accumUrl, setAccumUrl] = useState(null)
 
-  const inputRef = useRef(null)
+  // Checkboxes — which tracks are selected for multi-play
+  const [checked, setChecked] = useState({ a: true, b: true, c: false, d: false })
+  const [multiPlaying, setMultiPlaying] = useState(false)
 
-  // Audio elements
+  const inputRef = useRef(null)
   const audioRefA = useRef(null)
   const audioRefC = useRef(null)
   const audioRefD = useRef(null)
   const urlARef = useRef(null)
 
-  // Track durations -- always initialised to 0
   const [durA, setDurA] = useState(0)
   const [durC, setDurC] = useState(0)
   const [durD, setDurD] = useState(0)
-
-  // Playback times
   const [timeA, setTimeA] = useState(0)
   const [timeC, setTimeC] = useState(0)
   const [timeD, setTimeD] = useState(0)
-
-  // Playing flags
   const [playingA, setPlayingA] = useState(false)
   const [playingB, setPlayingB] = useState(false)
   const [playingC, setPlayingC] = useState(false)
@@ -84,7 +82,6 @@ export function FileMode() {
   const rafA = useRef(null)
   const rafC = useRef(null)
   const rafD = useRef(null)
-
   const [midiNote, setMidiNote] = useState(null)
   const cancelMidiRef = useRef(null)
   const [comparing, setComparing] = useState(false)
@@ -95,8 +92,7 @@ export function FileMode() {
     return () => { if (urlARef.current) URL.revokeObjectURL(urlARef.current) }
   }, [])
 
-  // ---- Audio helpers (stable functions, use refs only) ----
-
+  // ---- Audio helpers ----
   function playAudio(ref, rafRef, setTime, setPlaying) {
     if (!ref.current) return
     ref.current.currentTime = 0
@@ -127,16 +123,15 @@ export function FileMode() {
     }
   }
 
-  // ---- Stop all ----
   const stopAll = useCallback(() => {
     stopAudio(audioRefA, rafA, setTimeA, setPlayingA)
     stopAudio(audioRefC, rafC, setTimeC, setPlayingC)
     stopAudio(audioRefD, rafD, setTimeD, setPlayingD)
     if (cancelMidiRef.current) cancelMidiRef.current()
-    setPlayingB(false); setMidiNote(null); setComparing(false)
+    setPlayingB(false); setMidiNote(null)
+    setComparing(false); setMultiPlaying(false)
   }, [])
 
-  // ---- Track play handlers ----
   const handlePlayA = useCallback(() => {
     if (playingA) { stopAudio(audioRefA, rafA, setTimeA, setPlayingA); return }
     stopAll(); playAudio(audioRefA, rafA, setTimeA, setPlayingA)
@@ -155,26 +150,83 @@ export function FileMode() {
   const handlePlayB = useCallback(async () => {
     if (playingB) { stopAll(); return }
     if (!midiNotes.length) return
-    stopAll()
-    setPlayingB(true)
+    stopAll(); setPlayingB(true)
     cancelMidiRef.current = await playMidiNotes(
-      midiNotes,
-      midi => setMidiNote(midi),
+      midiNotes, midi => setMidiNote(midi),
       () => { setPlayingB(false); setMidiNote(null) }
     )
   }, [playingB, midiNotes, stopAll])
 
-  const handleCompare = useCallback(async () => {
-    if (comparing) { stopAll(); return }
-    stopAll(); setComparing(true)
-    playAudio(audioRefA, rafA, setTimeA, setPlayingA)
-    setPlayingB(true)
-    cancelMidiRef.current = await playMidiNotes(
-      midiNotes,
-      midi => setMidiNote(midi),
-      () => { setPlayingB(false); setMidiNote(null); setComparing(false) }
-    )
-  }, [comparing, midiNotes, stopAll])
+  // ---- Multi-track play (like LiveMode) ----
+  const handleMultiPlay = useCallback(async () => {
+    if (multiPlaying) { stopAll(); return }
+    stopAll(); setMultiPlaying(true)
+    let running = 0
+    const done = () => { running--; if (running <= 0) setMultiPlaying(false) }
+
+    if (checked.a && uploadedFile) {
+      running++
+      if (audioRefA.current) {
+        audioRefA.current.currentTime = 0
+        audioRefA.current.play().catch(() => {})
+        setPlayingA(true)
+        const tick = () => {
+          if (!audioRefA.current) return
+          setTimeA(audioRefA.current.currentTime)
+          if (!audioRefA.current.paused) {
+            rafA.current = requestAnimationFrame(tick)
+          } else { setPlayingA(false); setTimeA(0); done() }
+        }
+        rafA.current = requestAnimationFrame(tick)
+      }
+    }
+
+    if (checked.b && midiNotes.length) {
+      running++; setPlayingB(true)
+      cancelMidiRef.current = await playMidiNotes(
+        midiNotes, midi => setMidiNote(midi),
+        () => { setPlayingB(false); setMidiNote(null); done() }
+      )
+    }
+
+    if (checked.c && vocalsUrl) {
+      running++
+      if (audioRefC.current) {
+        audioRefC.current.currentTime = 0
+        audioRefC.current.play().catch(() => {})
+        setPlayingC(true)
+        const tick = () => {
+          if (!audioRefC.current) return
+          setTimeC(audioRefC.current.currentTime)
+          if (!audioRefC.current.paused) {
+            rafC.current = requestAnimationFrame(tick)
+          } else { setPlayingC(false); setTimeC(0); done() }
+        }
+        rafC.current = requestAnimationFrame(tick)
+      }
+    }
+
+    if (checked.d && accumUrl) {
+      running++
+      if (audioRefD.current) {
+        audioRefD.current.currentTime = 0
+        audioRefD.current.play().catch(() => {})
+        setPlayingD(true)
+        const tick = () => {
+          if (!audioRefD.current) return
+          setTimeD(audioRefD.current.currentTime)
+          if (!audioRefD.current.paused) {
+            rafD.current = requestAnimationFrame(tick)
+          } else { setPlayingD(false); setTimeD(0); done() }
+        }
+        rafD.current = requestAnimationFrame(tick)
+      }
+    }
+
+    if (running === 0) setMultiPlaying(false)
+  }, [multiPlaying, checked, uploadedFile, midiNotes, vocalsUrl, accumUrl, stopAll])
+
+  const toggleCheck = (id) => setChecked(prev => ({ ...prev, [id]: !prev[id] }))
 
   // ---- File processing ----
   const processFile = useCallback(async (file) => {
@@ -193,8 +245,8 @@ export function FileMode() {
     setUploadedFile(file)
     setDurA(0); setDurC(0); setDurD(0)
     setTimeA(0); setTimeC(0); setTimeD(0)
+    setChecked({ a: true, b: true, c: false, d: false })
 
-    // Track A persistent URL
     if (urlARef.current) URL.revokeObjectURL(urlARef.current)
     const fileUrl = URL.createObjectURL(file)
     urlARef.current = fileUrl
@@ -231,33 +283,30 @@ export function FileMode() {
                 setClassifyData(evt)
                 if (evt.result) setDetectedSource(evt.result)
               }
-              // Grab vocals/accom file names from separate step
               if (evt.step === 'separate' && evt.status === 'done') {
                 if (evt.vocals_file) {
                   const url = `${BACKEND}/files/${evt.vocals_file}`
-                  setVocalsUrl(url)
-                  loadAudio(audioRefC, url, setDurC)
+                  setVocalsUrl(url); loadAudio(audioRefC, url, setDurC)
+                  setChecked(p => ({ ...p, c: true }))
                 }
                 if (evt.accom_file) {
                   const url = `${BACKEND}/files/${evt.accom_file}`
-                  setAccumUrl(url)
-                  loadAudio(audioRefD, url, setDurD)
+                  setAccumUrl(url); loadAudio(audioRefD, url, setDurD)
+                  setChecked(p => ({ ...p, d: true }))
                 }
               }
             } else if (evt.type === 'done') {
               setDetectedSource(evt.source_type || null)
-
               if (evt.vocals_file) {
                 const url = `${BACKEND}/files/${evt.vocals_file}`
-                setVocalsUrl(url)
-                loadAudio(audioRefC, url, setDurC)
+                setVocalsUrl(url); loadAudio(audioRefC, url, setDurC)
+                setChecked(p => ({ ...p, c: true }))
               }
               if (evt.accom_file) {
                 const url = `${BACKEND}/files/${evt.accom_file}`
-                setAccumUrl(url)
-                loadAudio(audioRefD, url, setDurD)
+                setAccumUrl(url); loadAudio(audioRefD, url, setDurD)
+                setChecked(p => ({ ...p, d: true }))
               }
-
               if (evt.midi_file) {
                 try {
                   const midiRes = await fetch(`${BACKEND}/files/${evt.midi_file}`)
@@ -268,13 +317,11 @@ export function FileMode() {
                   setStatus('done')
                   downloadMidi(blob, `${fileStem}_output.mid`)
                 } catch (err) {
-                  setStatus('error')
-                  setErrorMsg(`Failed to fetch MIDI: ${err.message}`)
+                  setStatus('error'); setErrorMsg(`Failed to fetch MIDI: ${err.message}`)
                 }
               }
             } else if (evt.type === 'error') {
-              setStatus('error')
-              setErrorMsg(evt.detail || 'Unknown server error')
+              setStatus('error'); setErrorMsg(evt.detail || 'Unknown server error')
             }
           } catch (parseErr) {
             console.warn('SSE parse error:', parseErr)
@@ -282,8 +329,7 @@ export function FileMode() {
         }
       }
     } catch (err) {
-      setStatus('error')
-      setErrorMsg(err.message)
+      setStatus('error'); setErrorMsg(err.message)
     }
   }, [sourceType])
 
@@ -406,10 +452,13 @@ export function FileMode() {
             {/* Track A */}
             <div className="track-block">
               <div className="track-header">
+                <input type="checkbox" className="track-check"
+                  checked={checked.a} onChange={() => toggleCheck('a')}/>
                 <div className="track-color-bar" style={{background:'#3B6CF4'}}/>
                 <span className="track-name">Track A — {fileName}</span>
                 <span className="track-meta">{fmt(durA)}</span>
-                <button className="track-play-btn" style={{background:'#3B6CF4'}} onClick={handlePlayA} disabled={!uploadedFile}>
+                <button className="track-play-btn" style={{background:'#3B6CF4'}}
+                  onClick={handlePlayA} disabled={!uploadedFile}>
                   {playingA?'■':'▶'}
                 </button>
               </div>
@@ -421,10 +470,13 @@ export function FileMode() {
             {/* Track B (MIDI) */}
             <div className="track-block">
               <div className="track-header">
+                <input type="checkbox" className="track-check"
+                  checked={checked.b} onChange={() => toggleCheck('b')}/>
                 <div className="track-color-bar" style={{background:'#22C55E'}}/>
                 <span className="track-name">Track B — {stem}_output.mid</span>
                 <span className="track-meta">{midiNotes.length} notes</span>
-                <button className="track-play-btn" style={{background:'#22C55E'}} onClick={handlePlayB} disabled={!midiNotes.length}>
+                <button className="track-play-btn" style={{background:'#22C55E'}}
+                  onClick={handlePlayB} disabled={!midiNotes.length}>
                   {playingB?'■':'▶'}
                 </button>
               </div>
@@ -449,10 +501,13 @@ export function FileMode() {
             {vocalsUrl && (
               <div className="track-block">
                 <div className="track-header">
+                  <input type="checkbox" className="track-check"
+                    checked={checked.c} onChange={() => toggleCheck('c')}/>
                   <div className="track-color-bar" style={{background:'#F472B6'}}/>
                   <span className="track-name">Track C — Vocals</span>
                   <span className="track-meta">{fmt(durC)}</span>
-                  <button className="track-play-btn" style={{background:'#F472B6'}} onClick={handlePlayC}>
+                  <button className="track-play-btn" style={{background:'#F472B6'}}
+                    onClick={handlePlayC}>
                     {playingC?'■':'▶'}
                   </button>
                 </div>
@@ -466,10 +521,13 @@ export function FileMode() {
             {accumUrl && (
               <div className="track-block">
                 <div className="track-header">
+                  <input type="checkbox" className="track-check"
+                    checked={checked.d} onChange={() => toggleCheck('d')}/>
                   <div className="track-color-bar" style={{background:'#FB923C'}}/>
                   <span className="track-name">Track D — Accompaniment</span>
                   <span className="track-meta">{fmt(durD)}</span>
-                  <button className="track-play-btn" style={{background:'#FB923C'}} onClick={handlePlayD}>
+                  <button className="track-play-btn" style={{background:'#FB923C'}}
+                    onClick={handlePlayD}>
                     {playingD?'■':'▶'}
                   </button>
                 </div>
@@ -479,14 +537,20 @@ export function FileMode() {
               </div>
             )}
 
-            <div className="compare-btn-row">
-              <button className="compare-toggle" onClick={handleCompare} disabled={!midiNotes.length}>
-                ⇄ {comparing?'Stop':'Play A + B Together'}
-              </button>
-              <button className="btn btn-outline" style={{marginLeft:8}}
-                onClick={()=>downloadMidi(midiBlob,`${stem}_output.mid`)}>
-                ↓ Download MIDI
-              </button>
+            <div className="compare-btn-row" style={{flexDirection:'column', gap:8}}>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:'0.68rem',color:'var(--text3)',fontFamily:'var(--font-mono)'}}>
+                  Play checked tracks together:
+                </span>
+                <button className="compare-toggle" onClick={handleMultiPlay}
+                  disabled={!Object.values(checked).some(Boolean)}>
+                  ⇄ {multiPlaying ? 'Stop' : 'Play Selected'}
+                </button>
+                <button className="btn btn-outline" style={{marginLeft:'auto'}}
+                  onClick={()=>downloadMidi(midiBlob,`${stem}_output.mid`)}>
+                  ↓ Download MIDI
+                </button>
+              </div>
             </div>
           </div>
         </div>
