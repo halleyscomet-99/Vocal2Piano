@@ -166,12 +166,14 @@ async def separate_sources_async(input_path, output_dir, stem, emit):
 
     Copies both to OUTPUT_DIR with stem-prefixed names for /files/.
     """
-    await emit(
-        type="step",
-        step="separate",
-        status="running",
-        detail="Demucs htdemucs: separating vocals / accompaniment...",
-    )
+    if not shutil.which("demucs"):
+        await emit(
+            type="step",
+            step="separate",
+            status="running",
+            detail="Demucs htdemucs: separating vocals / accompaniment...",
+        )
+        return None
 
     loop = asyncio.get_running_loop()
 
@@ -281,12 +283,16 @@ async def run_basic_pitch_async(input_path, output_path, emit):
     Forces ONNX by passing nmp.onnx path directly (skips TF/TFLite).
     input_path must be a persistent path (not inside a tmp_dir).
     """
-    await emit(
-        type="step",
-        step="transcribe",
-        status="running",
-        detail=f"Basic Pitch [ONNX] -> {Path(input_path).name}",
-    )
+    try:
+        import basic_pitch  # noqa: F401
+    except ImportError:
+        await emit(
+            type="step",
+            step="transcribe",
+            status="running",
+            detail=f"Basic Pitch [ONNX] -> {Path(input_path).name}",
+        )
+        raise RuntimeError("basic-pitch not installed")
 
     try:
         from basic_pitch.inference import (  # noqa: PLC0415
