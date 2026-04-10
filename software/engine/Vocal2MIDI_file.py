@@ -394,9 +394,10 @@ async def run_pyin_async(input_path, output_path, emit):
         inst = Instrument(program=0, name="Voice Melody")
         prev = -1
         t0 = 0.0
-        for i, (f0, v, p) in enumerate(
-            zip(f0_arr or [], voiced_flag or [], voiced_prob or [])
-        ):
+        _f0 = f0_arr if f0_arr is not None else []
+        _vf = voiced_flag if voiced_flag is not None else []
+        _vp = voiced_prob if voiced_prob is not None else []
+        for i, (f0, v, p) in enumerate(zip(_f0, _vf, _vp)):
             t = i * hop_sec
             ok = (
                 f0 is not None
@@ -421,7 +422,7 @@ async def run_pyin_async(input_path, output_path, emit):
                 prev = mn
                 t0 = t
         if prev >= 0:
-            end = len(f0_arr or []) * hop_sec
+            end = len(_f0) * hop_sec
             if end - t0 > 0.04:
                 inst.notes.append(
                     Note(
@@ -641,32 +642,7 @@ def run_server(port=8000):
 
     @app.get("/")
     def health():
-        try:
-            import basic_pitch  # noqa: F401
-            caps = ["voice", "instrumental", "mixed"]
-            mode = "full"
-        except ImportError:
-            caps = ["voice"]
-            mode = "lite"
-        limits = {}
-        if mode == "lite":
-            limits = {
-                "instrumental": (
-                    "Basic Pitch not installed on this server "
-                    "(4 GB memory limit). Run locally for full access."
-                ),
-                "mixed": (
-                    "Demucs not installed on this server "
-                    "(requires 4 GB+ RAM). Run locally for full access."
-                ),
-            }
-        return {
-            "status": "ok",
-            "version": "1.8.0",
-            "capabilities": caps,
-            "server_mode": mode,
-            "limits": limits,
-        }
+        return {"status": "ok", "version": "1.8.0"}
 
     @app.get("/files/{filename}")
     def serve_file(filename: str):

@@ -1,142 +1,138 @@
 /**
- * TrackPlayer.jsx  --  Two-track comparison playback
- * ====================================================
- * Shows two labelled audio/MIDI tracks side by side.
- * Each track has an independent play/pause button.
- * A "Compare" button plays both simultaneously (offset
- * by a small visual delay so the user can tell them apart).
- *
- * Props
- * -----
- * trackA  { label, notes, blob, color }   original / input
- * trackB  { label, notes, blob, color }   converted MIDI
- * onNoteA {(midi)=>void}   called while track A plays each note
- * onNoteB {(midi)=>void}   called while track B plays each note
+ * TrackPlayer.jsx  v2
+ * -------------------
+ * Unified track block: progress scrubber, volume, play/pause.
+ * Handles audio-not-ready gracefully (Infinity duration).
  */
 
-import React, { useState, useRef, useCallback } from 'react'
-import { playMidiNotes } from '../utils/midiUtils'
+import React, { useCallback, useRef } from 'react'
+import { Waveform } from './Waveform'
 
-export function TrackPlayer({ trackA, trackB, onNoteA, onNoteB }) {
-  const [playingA, setPlayingA] = useState(false)
-  const [playingB, setPlayingB] = useState(false)
-  const [comparing, setComparing] = useState(false)
+function fmt(sec) {
+  if (!sec || !isFinite(sec) || sec <= 0) return ''
+  const m = Math.floor(sec / 60)
+  const s = (sec % 60).toFixed(1)
+  return m > 0 ? `${m}:${s.padStart(4,'0')}` : `${s}s`
+}
 
-  const cancelA = useRef(null)
-  const cancelB = useRef(null)
+export function TrackPlayer({
+  label       = 'Track',
+  color       = '#3B6CF4',
+  audioRef    = null,
+  audioBlob   = null,
+  duration    = 0,
+  currentTime = 0,
+  playing     = false,
+  disabled    = false,
+  onPlay      = () => {},
+  onSeek      = () => {},
+  volume      = 1,
+  onVolume    = () => {},
+  checked     = true,
+  onCheck     = () => {},
+  children,
+}) {
+  const barRef = useRef(null)
 
-  const stopAll = useCallback(() => {
-    if (cancelA.current) cancelA.current()
-    if (cancelB.current) cancelB.current()
-    setPlayingA(false)
-    setPlayingB(false)
-    setComparing(false)
-    if (onNoteA) onNoteA(null)
-    if (onNoteB) onNoteB(null)
-  }, [onNoteA, onNoteB])
+  // Safe duration: guard against Infinity / NaN
+  const safeDur = isFinite(duration) && duration > 0 ? duration : 0
+  const progress = safeDur > 0 ? Math.min(1, currentTime / safeDur) : 0
 
-  const playTrack = useCallback(async (track, setPlaying, cancelRef, onNote) => {
-    if (!track?.notes?.length) return
-    setPlaying(true)
-    cancelRef.current = await playMidiNotes(
-      track.notes,
-      onNote,
-      () => {
-        setPlaying(false)
-        if (onNote) onNote(null)
-      }
-    )
-  }, [])
+  const calcTime = useCallback((e) => {
+    if (!barRef.current || !safeDur) return null
+    const rect  = barRef.current.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    return ratio * safeDur
+  }, [safeDur])
 
-  const handlePlayA = useCallback(async () => {
-    if (playingA) { stopAll(); return }
-    stopAll()
-    await playTrack(trackA, setPlayingA, cancelA, onNoteA)
-  }, [playingA, trackA, stopAll, playTrack, onNoteA])
+  const handleMouseDown = useCallback((e) => {
+    const t = calcTime(e)
+    if (t === null) return
+    onSeek(t)
 
-  const handlePlayB = useCallback(async () => {
-    if (playingB) { stopAll(); return }
-    stopAll()
-    await playTrack(trackB, setPlayingB, cancelB, onNoteB)
-  }, [playingB, trackB, stopAll, playTrack, onNoteB])
-
-  const handleCompare = useCallback(async () => {
-    if (comparing) { stopAll(); return }
-    stopAll()
-    setComparing(true)
-    // Play both tracks; they share Tone.js Transport so they're in sync
-    cancelA.current = await playMidiNotes(
-      trackA?.notes || [],
-      onNoteA,
-      () => setPlayingA(false)
-    )
-    cancelB.current = await playMidiNotes(
-      trackB?.notes || [],
-      onNoteB,
-      () => {
-        setPlayingB(false)
-        setComparing(false)
-        if (onNoteA) onNoteA(null)
-        if (onNoteB) onNoteB(null)
-      }
-    )
-  }, [comparing, trackA, trackB, stopAll, onNoteA, onNoteB])
-
-  const hasA = trackA?.notes?.length > 0
-  const hasB = trackB?.notes?.length > 0
+    const onMove = (ev) => {
+      const tt = calcTime(ev)
+      if (tt !== null) onSeek(tt)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [calcTime, onSeek])
 
   return (
-    <div className="track-player">
-      <div className="track-row">
-        {/* Track A */}
-        <div className={`track-card ${playingA ? 'active' : ''}`}
-          style={{ '--track-color': trackA?.color || '#4DAAFF' }}>
-          <div className="track-label">{trackA?.label || 'Track A'}</div>
-          <div className="track-meta">
-            {hasA
-              ? `${trackA.notes.length} notes`
-              : 'No data'}
-          </div>
-          <button
-            className="track-btn"
-            onClick={handlePlayA}
-            disabled={!hasA}
-          >
-            {playingA ? '■' : '▶'}
-          </button>
-        </div>
+    <div className="track-block">
+      {/* Header */}
+      <div className="track-header">
+        <input type="checkbox" className="track-check"
+          checked={checked} onChange={onCheck} />
+        <div className="track-color-bar" style={{ background: color }} />
+        <span className="track-name">{label}</span>
 
-        {/* Compare button (centre) */}
-        <button
-          className={`compare-btn ${comparing ? 'active' : ''}`}
-          onClick={handleCompare}
-          disabled={!hasA || !hasB}
-          title="Play both tracks simultaneously"
-        >
-          {comparing ? '■' : '⇄'}
-          <span className="compare-label">
-            {comparing ? 'Stop' : 'Compare'}
-          </span>
+        <span className="track-meta" style={{ minWidth: 80, textAlign: 'right' }}>
+          {playing && currentTime > 0 && safeDur > 0
+            ? `${fmt(currentTime)} / ${fmt(safeDur)}`
+            : fmt(safeDur)}
+        </span>
+
+        {/* Volume */}
+        <input type="range" min={0} max={1} step={0.05} value={volume}
+          onChange={e => onVolume(Number(e.target.value))}
+          style={{ width: 56, accentColor: color, cursor: 'pointer', flexShrink: 0 }}
+          title={`Volume ${Math.round(volume * 100)}%`}
+        />
+
+        {/* Play */}
+        <button className="track-play-btn" style={{ background: color }}
+          onClick={onPlay} disabled={disabled}>
+          {playing ? '■' : '▶'}
         </button>
-
-        {/* Track B */}
-        <div className={`track-card ${playingB ? 'active' : ''}`}
-          style={{ '--track-color': trackB?.color || '#E8A030' }}>
-          <div className="track-label">{trackB?.label || 'Track B'}</div>
-          <div className="track-meta">
-            {hasB
-              ? `${trackB.notes.length} notes`
-              : 'No data'}
-          </div>
-          <button
-            className="track-btn"
-            onClick={handlePlayB}
-            disabled={!hasB}
-          >
-            {playingB ? '■' : '▶'}
-          </button>
-        </div>
       </div>
+
+      {/* Scrubber — only when we have a real duration */}
+      <div
+        ref={barRef}
+        onMouseDown={safeDur > 0 ? handleMouseDown : undefined}
+        style={{
+          height: 5,
+          background: 'var(--bg2)',
+          cursor: safeDur > 0 ? 'pointer' : 'default',
+          position: 'relative',
+          userSelect: 'none',
+        }}
+      >
+        <div style={{
+          position: 'absolute', left: 0, top: 0,
+          width: `${progress * 100}%`, height: '100%',
+          background: color, opacity: 0.75,
+        }} />
+        {safeDur > 0 && (
+          <div style={{
+            position: 'absolute',
+            left: `${progress * 100}%`, top: '50%',
+            transform: 'translate(-50%,-50%)',
+            width: 11, height: 11, borderRadius: '50%',
+            background: color, boxShadow: '0 0 0 2px white',
+            pointerEvents: 'none',
+          }} />
+        )}
+      </div>
+
+      {/* Waveform */}
+      <div className="track-wave">
+        <Waveform
+          audioBlob={audioBlob}
+          currentTime={currentTime}
+          duration={safeDur}
+          color={color}
+          label={label.split('—')[0].trim().toUpperCase()}
+          isActive={playing && !audioBlob}
+        />
+      </div>
+
+      {children}
     </div>
   )
 }

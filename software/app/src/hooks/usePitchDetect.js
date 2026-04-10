@@ -1,9 +1,8 @@
 /**
- * usePitchDetect.js  v3.1
+ * usePitchDetect.js  v3.2
  * ----------------------
- * Fixed: `onChordNotes` undefined reference in ws.onmessage
- * Added: chordMidis state, returned from hook
- * Added: chordMidis cleared on stop/silence
+ * Fixed: ws.onmessage field names (midi_note / f0 from Python)
+ * Removed: /save 404 calls
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react'
@@ -74,7 +73,7 @@ export function usePitchDetect(inputMode = 'instrument') {
   const [currentNote, setCurrentNote] = useState(null)
   const [isListening, setIsListening] = useState(false)
   const [noteHistory, setNoteHistory] = useState([])
-  const [chordMidis, setChordMidis] = useState([])   // ← polyphonic chord notes
+  const [chordMidis, setChordMidis] = useState([])
   const [analyserNode, setAnalyserNode] = useState(null)
   const [sourceMode, setSourceMode] = useState('browser')
 
@@ -215,10 +214,13 @@ export function usePitchDetect(inputMode = 'instrument') {
       ws.onmessage = e => {
         try {
           const d = JSON.parse(e.data)
-          // FIX: was `if (onChordNotes)` which is undefined -- now uses setChordMidis directly
+          // Python sends: midi_note, f0, conf, chord_notes
+          const midi = d.midi_note ?? d.midi ?? -1
+          const freq = d.f0 ?? d.freq ?? 0
+          const conf = d.conf ?? 0
           const chordNotes = d.chord_notes || []
-          setChordMidis(chordNotes.map(n => n.midi))
-          handleNoteEvent(d.midi ?? -1, d.freq ?? 0, d.conf ?? 0)
+          setChordMidis(chordNotes.map(n => n.midi ?? n))
+          handleNoteEvent(midi, freq, conf)
         } catch {}
       }
 
@@ -330,7 +332,7 @@ export function usePitchDetect(inputMode = 'instrument') {
 
   return {
     currentNote, isListening, noteHistory,
-    chordMidis,    // ← new: array of MIDI notes for polyphonic chord display
+    chordMidis,
     analyserNode, sourceMode, start, stop,
   }
 }

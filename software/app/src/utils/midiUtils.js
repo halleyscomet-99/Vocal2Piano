@@ -12,19 +12,19 @@ import { Midi } from '@tonejs/midi'
 import * as Tone from 'tone'
 
 const BPM = 120
-const PPQ = 480 // pulses per quarter note (standard MIDI resolution)
 
 /**
  * Convert an array of note events to a MIDI file blob.
+ * NOTE: ppq is read-only in newer @tonejs/midi — do NOT set it directly.
  *
- * @param {Array} notes - Array of { midi, time, duration } in seconds
- * @param {number} bpm  - Tempo for the MIDI file (default 120)
- * @returns {Blob}      - MIDI file as a Blob (type 'audio/midi')
+ * @param {Array}  notes - Array of { midi, time, duration } in seconds
+ * @param {number} bpm   - Tempo for the MIDI file (default 120)
+ * @returns {Blob}       - MIDI file as a Blob (type 'audio/midi')
  */
 export function notesToMidiBlob(notes, bpm = BPM) {
   const midi = new Midi()
   midi.header.setTempo(bpm)
-  midi.header.ppq = PPQ
+  // ppq is read-only — do not assign, default (480) is fine
 
   const track = midi.addTrack()
   track.name = 'Voice2Piano'
@@ -32,10 +32,10 @@ export function notesToMidiBlob(notes, bpm = BPM) {
   for (const n of notes) {
     if (n.midi < 0 || n.duration < 0.04) continue
     track.addNote({
-      midi: n.midi,
-      time: n.time,       // seconds from start
+      midi:     n.midi,
+      time:     n.time,
       duration: n.duration,
-      velocity: 0.65,
+      velocity: n.velocity != null ? n.velocity / 127 : 0.65,
     })
   }
 
@@ -50,6 +50,7 @@ export function notesToMidiBlob(notes, bpm = BPM) {
  * @param {string} filename - Suggested filename
  */
 export function downloadMidi(blob, filename = 'voice2piano.mid') {
+  if (!blob) return
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -76,10 +77,10 @@ export async function parseMidiNotes(source) {
   for (const track of midi.tracks) {
     for (const n of track.notes) {
       notes.push({
-        midi: n.midi,
-        time: n.time,
+        midi:     n.midi,
+        time:     n.time,
         duration: n.duration,
-        velocity: n.velocity,
+        velocity: Math.round((n.velocity || 0.65) * 127),
       })
     }
   }
@@ -90,20 +91,20 @@ export async function parseMidiNotes(source) {
  * Play MIDI notes through Tone.js synth.
  * Returns a cancel function.
  *
- * @param {Array}    notes       - Array of { midi, time, duration }
- * @param {Function} onNote      - Called on each note: (midi, time) => void
- * @param {Function} onComplete  - Called when playback ends
- * @returns {Function}           - Cancel function
+ * @param {Array}    notes      - Array of { midi, time, duration, velocity }
+ * @param {Function} onNote     - Called on each note: (midi) => void
+ * @param {Function} onComplete - Called when playback ends
+ * @returns {Function}          - Cancel function
  */
-export async function playMidiNotes(notes, onNote, onComplete) {
+export async function playMidiNotes(notes, onNote, onComplete, volume = 0.65) {
   await Tone.start()
-  Tone.Transport.stop()
-  Tone.Transport.cancel()
+  Tone.getTransport().stop()
+  Tone.getTransport().cancel()
 
   const synth = new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: 'triangle' },
-    envelope: { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.8 },
-    volume: -12,
+    envelope:   { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.8 },
+    volume:     Math.round(20 * Math.log10(Math.max(0.001, volume))),
   }).toDestination()
 
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
@@ -113,29 +114,29 @@ export async function playMidiNotes(notes, onNote, onComplete) {
 
   for (const n of notes) {
     if (n.midi < 21 || n.midi > 108) continue
-    const noteInOctave = n.midi % 12
-    const octave = Math.floor(n.midi / 12) - 1
-    const noteName = `${NOTE_NAMES[noteInOctave]}${octave}`
+    const octave   = Math.floor(n.midi / 12) - 1
+    const noteName = `${NOTE_NAMES[n.midi % 12]}${octave}`
+    const vel      = n.velocity != null ? n.velocity / 127 : 0.65
 
-    Tone.Transport.schedule((time) => {
+    Tone.getTransport().schedule((time) => {
       if (cancelled) return
-      synth.triggerAttackRelease(noteName, n.duration, time, n.velocity || 0.65)
+      synth.triggerAttackRelease(noteName, n.duration, time, vel)
       Tone.getDraw().schedule(() => {
-        if (!cancelled && onNote) onNote(n.midi, n.time)
+        if (!cancelled && onNote) onNote(n.midi)
       }, time)
     }, n.time)
   }
 
-  Tone.Transport.schedule(() => {
+  Tone.getTransport().schedule(() => {
     if (!cancelled && onComplete) onComplete()
   }, endTime + 0.5)
 
-  Tone.Transport.start()
+  Tone.getTransport().start()
 
   return () => {
     cancelled = true
-    Tone.Transport.stop()
-    Tone.Transport.cancel()
+    Tone.getTransport().stop()
+    Tone.getTransport().cancel()
     synth.dispose()
   }
 }
