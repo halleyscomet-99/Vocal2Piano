@@ -1,0 +1,8 @@
+# Not uploaded by `vercel` deploys from this folder.
+# local/ holds transcriptions of copyrighted songs: never published.
+local/
+node_modules
+node_modules 2
+node_modules.nosync
+dist
+*.tsbuildinfo

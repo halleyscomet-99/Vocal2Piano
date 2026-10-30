@@ -1,0 +1,4 @@
+# audio to transcribe: never commit
+input/
+.venv/
+__pycache__/

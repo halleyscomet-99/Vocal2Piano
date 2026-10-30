@@ -1,0 +1,1172 @@
+/* Vocal2Piano 95: a retro desktop. Every feature is a window, opened from the desktop or Start. */
+
+:root {
+  --desk: #008080;
+  --face: #c0c0c0;
+  --hi: #ffffff;
+  --lite: #dfdfdf;
+  --shadow: #808080;
+  --dark: #0a0a0a;
+  --navy: #000080;
+  --title-a: #000080;
+  --title-b: #1084d0;
+  --title-off-a: #808080;
+  --title-off-b: #b5b5b5;
+  --ink: #000;
+  --ink-dim: #404040;
+  --title-off-text: #c0c0c0;
+  --window: #ffffff;
+  --bad: #c00000;
+  /* Windows' own fonts: MS Sans Serif for the interface, Courier New for fixed width */
+  --ui: "Microsoft Sans Serif", "MS Sans Serif", Tahoma, Geneva, Verdana, sans-serif;
+  --mono: "Courier New", Courier, monospace;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: var(--ui);
+  font-size: 12px;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- Bevels ---------- */
+
+.window,
+.btn,
+.start-menu {
+  box-shadow:
+    inset -1px -1px var(--dark),
+    inset 1px 1px var(--lite),
+    inset -2px -2px var(--shadow),
+    inset 2px 2px var(--hi);
+}
+
+.sunken {
+  background: var(--window);
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--shadow),
+    inset -2px -2px var(--lite),
+    inset 2px 2px var(--dark);
+}
+
+/* ---------- Desktop ---------- */
+
+.desktop {
+  position: fixed;
+  inset: 0 0 30px 0;
+  overflow: hidden;
+}
+
+.icons {
+  position: absolute;
+  top: 8px;
+  left: 6px;
+  display: grid;
+  gap: 10px;
+}
+
+.dicon {
+  width: 76px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 2px;
+  background: none;
+  border: 0;
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.dicon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.dicon span {
+  padding: 1px 2px;
+  line-height: 1.2;
+}
+
+.dicon:focus-visible {
+  outline: none;
+}
+
+.dicon:focus-visible span {
+  background: var(--navy);
+  outline: 1px dotted #fff;
+}
+
+/* ---------- Windows ---------- */
+
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: 3px;
+  background: var(--face);
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  flex: none;
+  padding: 0 2px 0 4px;
+  color: var(--title-off-text);
+  font-weight: bold;
+  background: linear-gradient(90deg, var(--title-off-a), var(--title-off-b));
+  user-select: none;
+  touch-action: none;
+  cursor: default;
+}
+
+.window.focused .titlebar {
+  color: #fff;
+  background: linear-gradient(90deg, var(--title-a), var(--title-b));
+}
+
+.titlebar svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.titlebar .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn.tbtn {
+  width: 16px;
+  height: 14px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.btn.tbtn.close {
+  margin-left: 2px;
+}
+
+.win-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: auto;
+}
+
+.grip {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 0 45%, var(--shadow) 45% 52%, var(--hi) 52% 58%, transparent 58% 70%, var(--shadow) 70% 77%, var(--hi) 77% 83%, transparent 83%);
+}
+
+/* ---------- Controls ---------- */
+
+.btn {
+  min-width: 72px;
+  min-height: 23px;
+  padding: 3px 10px;
+  background: var(--face);
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:active:not(:disabled),
+.btn.pressed {
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--dark),
+    inset -2px -2px var(--lite),
+    inset 2px 2px var(--shadow);
+}
+
+.btn.pressed {
+  background: repeating-conic-gradient(var(--face) 0 25%, var(--hi) 0 50%) 0 0 / 2px 2px;
+}
+
+.btn:disabled {
+  color: var(--shadow);
+  text-shadow: 1px 1px 0 var(--hi);
+  cursor: default;
+}
+
+.btn:focus-visible {
+  outline: 1px dotted #000;
+  outline-offset: -4px;
+}
+
+.btn.icon {
+  min-width: 26px;
+  padding: 3px 5px;
+}
+
+.btn.big {
+  min-height: 34px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+/* Listen: a small lamp that lights while it hears singing */
+.ear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #405040;
+  box-shadow: inset 1px 1px #202820;
+}
+.led.on {
+  background: #3f3;
+  box-shadow: 0 0 4px #3f3;
+}
+
+.btn.rec {
+  color: var(--bad);
+  font-weight: bold;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.row.end {
+  justify-content: flex-end;
+}
+
+.grow {
+  flex: 1;
+}
+
+fieldset.group {
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--shadow),
+    inset -2px -2px var(--shadow),
+    inset 2px 2px var(--hi);
+  display: grid;
+  gap: 8px;
+}
+
+fieldset.group legend {
+  padding: 0 3px;
+}
+
+select {
+  height: 21px;
+  padding: 1px 20px 1px 3px;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='17'%3E%3Crect width='16' height='17' fill='%23c0c0c0'/%3E%3Cpath d='M0 16.5H16M15.5 0V17' stroke='%23000'/%3E%3Cpath d='M0.5 0V16M0 0.5H15' stroke='%23fff'/%3E%3Cpath d='M4 7h7l-3.5 4z' fill='%23000'/%3E%3C/svg%3E") right 2px center no-repeat,
+    var(--window);
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--shadow),
+    inset -2px -2px var(--lite),
+    inset 2px 2px var(--dark);
+  cursor: pointer;
+}
+
+label.check,
+label.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+label.check input,
+label.radio input {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  background: var(--window);
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--shadow),
+    inset -2px -2px var(--lite),
+    inset 2px 2px var(--dark);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+label.check input:checked::after {
+  content: "✓";
+  font-size: 11px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+label.radio input {
+  border-radius: 50%;
+}
+
+label.radio input:checked::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #000;
+}
+
+label.check input:disabled,
+label.check input:disabled + span {
+  color: var(--shadow);
+  background: var(--face);
+  cursor: default;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--face);
+  box-shadow:
+    inset 1px 1px var(--shadow),
+    inset -1px -1px var(--hi);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 19px;
+  margin-top: -8px;
+  background: var(--face);
+  box-shadow:
+    inset -1px -1px var(--dark),
+    inset 1px 1px var(--hi),
+    inset -2px -2px var(--shadow);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: var(--face);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 19px;
+  border: 0;
+  border-radius: 0;
+  background: var(--face);
+}
+
+.spin {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.spin output {
+  min-width: 46px;
+  padding: 0 4px;
+  text-align: center;
+  font-family: var(--ui);
+  font-weight: bold;
+  font-size: 13px;
+  line-height: 21px;
+}
+
+.spin .btn {
+  min-width: 20px;
+  min-height: 21px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.lcd {
+  font-family: var(--ui);
+  font-weight: bold;
+  color: #33ff33;
+  background: #000;
+  box-shadow:
+    inset 1px 1px var(--shadow),
+    inset -1px -1px var(--hi);
+}
+
+.err {
+  color: var(--bad);
+}
+
+.dim {
+  color: var(--ink-dim);
+}
+
+/* ---------- Tabs ---------- */
+
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  padding-left: 3px;
+  position: relative;
+  z-index: 1;
+  margin-bottom: -8px;
+}
+
+.tabs button {
+  padding: 3px 12px 4px;
+  background: var(--face);
+  border: 0;
+  border-radius: 3px 3px 0 0;
+  margin-right: -2px;
+  box-shadow:
+    inset 1px 1px var(--hi),
+    inset -1px 0 var(--dark),
+    inset -2px 0 var(--shadow),
+    inset 2px 2px var(--lite);
+  cursor: pointer;
+}
+
+.tabs button.on {
+  padding: 5px 14px 6px;
+  margin-bottom: -2px;
+  position: relative;
+  z-index: 2;
+}
+
+.tab-page {
+  padding: 12px 10px 10px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  box-shadow:
+    inset -1px -1px var(--dark),
+    inset 1px 1px var(--hi),
+    inset -2px -2px var(--shadow),
+    inset 2px 2px var(--lite);
+}
+
+/* ---------- Lists ---------- */
+
+.list {
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+  overflow: auto;
+}
+
+.list li {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px;
+}
+
+.list li.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 2px 4px;
+  background: var(--face);
+  box-shadow:
+    inset -1px -1px var(--dark),
+    inset 1px 1px var(--hi);
+}
+
+.list li.click {
+  cursor: pointer;
+}
+
+.list li.click:hover,
+.list li.sel {
+  background: var(--navy);
+  color: #fff;
+}
+
+.list .bad {
+  color: var(--bad);
+}
+
+.list li.click:hover .bad,
+.list li.sel .bad {
+  color: #ffb0b0;
+}
+
+.list time {
+  font-family: var(--mono);
+}
+
+/* ---------- Taskbar & Start ---------- */
+
+.taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30px;
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 2px;
+  background: var(--face);
+  box-shadow:
+    inset 0 1px var(--lite),
+    inset 0 2px var(--hi);
+}
+
+.start {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 6px;
+  font-weight: bold;
+}
+
+.start svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tasks {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.tasks .btn {
+  flex: 0 1 160px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.tasks .btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.tasks .btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 8px;
+  white-space: nowrap;
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--shadow);
+}
+
+.tray .live {
+  color: var(--bad);
+  font-weight: bold;
+}
+
+.start-menu {
+  position: fixed;
+  left: 2px;
+  bottom: 28px;
+  z-index: 8500;
+  display: flex;
+  padding: 3px;
+  background: var(--face);
+}
+
+.start-band {
+  width: 24px;
+  padding: 6px 0;
+  background: linear-gradient(0deg, var(--title-a), var(--title-b));
+  color: var(--face);
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.start-band b {
+  color: #fff;
+}
+
+.start-items {
+  display: grid;
+  min-width: 190px;
+}
+
+.start-items button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 20px 5px 6px;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.start-items button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.start-items button:hover,
+.start-items button:focus-visible {
+  background: var(--navy);
+  color: #fff;
+  outline: none;
+}
+
+.start-items hr {
+  width: 100%;
+  margin: 2px 0;
+  border: 0;
+  border-top: 1px solid var(--shadow);
+  border-bottom: 1px solid var(--hi);
+}
+
+/* ---------- Status bar ---------- */
+
+.statusbar {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.statusbar > span {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-shadow:
+    inset -1px -1px var(--hi),
+    inset 1px 1px var(--shadow);
+}
+
+.statusbar > span.fit {
+  flex: none;
+}
+
+/* ---------- Player ---------- */
+
+.player .win-body {
+  padding: 4px;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 2px;
+  flex: none;
+}
+
+.toolbar .divider {
+  width: 2px;
+  align-self: stretch;
+  margin: 0 3px;
+  border-left: 1px solid var(--shadow);
+  border-right: 1px solid var(--hi);
+}
+
+/* Part editing strip above the timeline */
+.partbar {
+  min-height: 27px;
+}
+
+.partbar.on > b {
+  padding: 0 4px;
+  color: var(--navy);
+}
+
+.toolbar .time {
+  padding: 0 8px;
+  font-size: 15px;
+  line-height: 23px;
+  min-width: 112px;
+  text-align: center;
+}
+
+.toolbar .time span {
+  color: #1a8f1a;
+  font-size: 12px;
+}
+
+.toolbar .tl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stage-box {
+  flex: 1 1 auto;
+  min-height: 140px;
+  position: relative;
+  padding: 2px;
+  background: #000;
+  box-shadow:
+    inset 1px 1px var(--shadow),
+    inset -1px -1px var(--hi),
+    inset 2px 2px var(--dark);
+}
+
+.stage-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-caption {
+  position: absolute;
+  left: 8px;
+  top: 18px;
+  max-width: calc(100% - 16px);
+  padding: 2px 6px;
+  background: #000;
+  border: 1px solid #404040;
+  color: #aaa;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-caption b {
+  color: #fff;
+}
+
+/* ---------- Track view ---------- */
+
+.trackview {
+  flex: none;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  padding: 2px;
+  background: #000;
+  box-shadow:
+    inset 1px 1px var(--shadow),
+    inset -1px -1px var(--hi),
+    inset 2px 2px var(--dark);
+}
+
+.track-heads {
+  display: flex;
+  flex-direction: column;
+  background: var(--face);
+}
+
+.track-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  overflow: hidden;
+  box-shadow:
+    inset -1px -1px var(--shadow),
+    inset 1px 1px var(--hi);
+}
+
+.track-head .swatch {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+.track-head b {
+  flex: 1;
+  min-width: 0;
+  font-weight: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-head .btn {
+  min-width: 18px;
+  min-height: 16px;
+  padding: 0 3px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.track-head input[type="range"] {
+  width: 46px;
+  height: 14px;
+}
+
+.track-head.ruler {
+  justify-content: flex-end;
+}
+
+.track-head.ruler span {
+  flex: 1;
+  color: var(--ink-dim);
+}
+
+.track-head output {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.track-canvas {
+  display: block;
+  width: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.track-canvas:active {
+  cursor: grabbing;
+}
+
+.overview {
+  grid-column: 1 / -1;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin-top: 2px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* ---------- Window contents ---------- */
+
+.drop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 8px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.drop.over {
+  outline: 2px dashed var(--navy);
+  outline-offset: -6px;
+}
+
+.drop svg {
+  width: 32px;
+  height: 32px;
+}
+
+.parts {
+  max-height: 170px;
+}
+
+.parts li {
+  grid-template-columns: minmax(0, 1fr) 48px 92px;
+}
+
+.parts li > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.demo-list li {
+  grid-template-columns: 14px 86px minmax(0, 1fr) 34px;
+}
+
+.hum-state {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.hum-meter {
+  position: relative;
+  flex: 1;
+  height: 12px;
+  overflow: hidden;
+}
+.hum-meter i {
+  position: absolute;
+  inset: 2px;
+  transform-origin: left;
+  background: #808080;
+}
+.hum-meter i.on {
+  background: #00a000;
+}
+.hum-note {
+  min-width: 32px;
+  font-weight: bold;
+  text-align: center;
+}
+.songs audio {
+  height: 28px;
+  max-width: 210px;
+}
+
+.bars {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.bars .btn {
+  min-width: 0;
+  padding: 8px 2px 4px;
+  position: relative;
+  font-weight: bold;
+}
+
+.bars .btn small {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  font-size: 9px;
+  font-weight: normal;
+  color: var(--ink-dim);
+}
+
+.bars .btn.soft {
+  color: var(--ink-dim);
+  font-weight: normal;
+}
+
+.bars .btn.full {
+  text-decoration: underline;
+}
+
+.voice-meter {
+  position: relative;
+  height: 34px;
+}
+
+.voice-meter .oct {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  padding-left: 2px;
+  border-left: 1px dotted var(--shadow);
+  font-size: 9px;
+  color: var(--ink-dim);
+}
+
+.voice-meter .band {
+  position: absolute;
+  top: 15px;
+  height: 12px;
+  background: var(--navy);
+}
+
+.voice-meter .needle {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--bad);
+}
+
+.voice-meter .vu {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  height: 3px;
+  transform-origin: left;
+  background: #00a000;
+}
+
+.big-lcd {
+  padding: 6px 10px;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+}
+
+.stats div {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  text-align: center;
+}
+
+.stats b {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.stats .bad b {
+  color: var(--bad);
+}
+
+.problems,
+.phrases {
+  max-height: 180px;
+}
+
+.problems li,
+.phrases li {
+  grid-template-columns: 50px 100px minmax(0, 1fr);
+}
+
+.serial-log {
+  margin: 0;
+  padding: 4px 6px;
+  height: 84px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: pre-wrap;
+}
+
+.msgbox {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 6px 4px;
+  max-width: 340px;
+}
+
+.msgbox svg {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.welcome ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.welcome li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.welcome li svg {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.welcome h3 {
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+
+.welcome li p {
+  margin: 0;
+}
+
+/* ---------- Phones: one window at a time, full screen ---------- */
+
+@media (max-width: 760px) {
+  .icons {
+    grid-template-columns: repeat(3, 76px);
+  }
+  .window {
+    position: fixed;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: calc(100% - 30px) !important;
+  }
+  .grip {
+    display: none;
+  }
+  .tasks .btn {
+    flex-basis: 40px;
+  }
+  .tasks .btn span {
+    display: none;
+  }
+  .trackview {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+  .track-head input[type="range"] {
+    display: none;
+  }
+}

@@ -1,0 +1,8 @@
+node_modules
+dist
+*.tsbuildinfo
+node_modules.nosync
+# local demo files: never commit
+local/
+.vercel
+.env*.local
